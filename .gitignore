@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.claude/prompt-tracker/
+coverage/

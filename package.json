@@ -1,0 +1,39 @@
+{
+  "name": "prompt-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local LLM gateway for capturing Claude Code prompt payloads.",
+  "type": "module",
+  "packageManager": "pnpm@10.7.1",
+  "bin": {
+    "prompt-gateway": "./dist/cli.js"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs,json,md}": [
+      "biome check --write --no-errors-on-unmatched"
+    ]
+  },
+  "scripts": {
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "build": "tsc -p tsconfig.json",
+    "commitlint": "commitlint --edit",
+    "dev": "tsx src/cli.ts serve",
+    "lint-staged": "lint-staged",
+    "prepare": "husky",
+    "test": "tsx --test test/**/*.test.ts"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.11",
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
+    "@types/node": "^25.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
