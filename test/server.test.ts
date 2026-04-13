@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { createGatewayServer } from "../src/server.js";
-import { close, createTempDir, listen, onlyEntry, waitFor } from "./helpers.js";
+import { close, createTempDir, listen, onlyEntry, waitForEntries } from "./helpers.js";
 
 test("gateway proxies a JSON messages request and writes artifacts", async () => {
   const tempRoot = await createTempDir("prompt-gateway-server");
@@ -56,11 +56,12 @@ test("gateway proxies a JSON messages request and writes artifacts", async () =>
     assert.match(upstreamRequestBody, /hello proxy/);
 
     const captureRoot = path.join(tempRoot, "captures");
-    const captureDays = await waitFor(() => fs.readdir(captureRoot));
-    assert.equal(captureDays.length, 1);
+    const captureDays = await waitForEntries(() => fs.readdir(captureRoot), "capture day");
     const captureDay = onlyEntry(captureDays, "capture day");
-    const captureFiles = await waitFor(() => fs.readdir(path.join(captureRoot, captureDay)));
-    assert.equal(captureFiles.length, 1);
+    const captureFiles = await waitForEntries(
+      () => fs.readdir(path.join(captureRoot, captureDay)),
+      "capture file",
+    );
     const captureFile = onlyEntry(captureFiles, "capture file");
     const capture = JSON.parse(
       await fs.readFile(path.join(captureRoot, captureDay, captureFile), "utf8"),
@@ -70,7 +71,7 @@ test("gateway proxies a JSON messages request and writes artifacts", async () =>
     assert.equal(capture.derived.model, "claude-sonnet-4-5");
 
     const htmlRoot = path.join(tempRoot, "html");
-    const htmlDays = await waitFor(() => fs.readdir(htmlRoot));
+    const htmlDays = await waitForEntries(() => fs.readdir(htmlRoot), "html day");
     assert.equal(htmlDays.length, 1);
   } finally {
     await close(gatewayInfo.server);
@@ -155,9 +156,12 @@ test("gateway records upstream failure responses", async () => {
 
     assert.equal(response.status, 500);
     const captureRoot = path.join(tempRoot, "captures");
-    const captureDays = await waitFor(() => fs.readdir(captureRoot));
+    const captureDays = await waitForEntries(() => fs.readdir(captureRoot), "capture day");
     const captureDay = onlyEntry(captureDays, "capture day");
-    const captureFiles = await waitFor(() => fs.readdir(path.join(captureRoot, captureDay)));
+    const captureFiles = await waitForEntries(
+      () => fs.readdir(path.join(captureRoot, captureDay)),
+      "capture file",
+    );
     const captureFile = onlyEntry(captureFiles, "capture file");
     const capture = JSON.parse(
       await fs.readFile(path.join(captureRoot, captureDay, captureFile), "utf8"),

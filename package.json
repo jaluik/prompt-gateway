@@ -1,10 +1,21 @@
 {
-  "name": "prompt-tracker",
+  "name": "@jaluik/prompt-tracker",
   "version": "0.1.0",
-  "private": true,
   "description": "Local LLM gateway for capturing Claude Code prompt payloads.",
   "type": "module",
   "packageManager": "pnpm@10.7.1",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "bin": {
     "prompt-gateway": "./dist/cli.js"
   },
@@ -16,11 +27,14 @@
   "scripts": {
     "format": "biome format --write .",
     "check": "biome check .",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "commitlint": "commitlint --edit",
-    "dev": "tsx src/cli.ts serve",
+    "dev": "tsx src/cli.ts",
     "lint-staged": "lint-staged",
+    "pack:dry": "pnpm pack --pack-destination ./.artifacts",
+    "prepack": "pnpm build",
     "prepare": "husky",
+    "start": "node dist/cli.js",
     "test": "tsx --test test/**/*.test.ts"
   },
   "engines": {
@@ -33,6 +47,7 @@
     "@types/node": "^25.6.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }

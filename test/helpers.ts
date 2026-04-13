@@ -59,3 +59,18 @@ export function onlyEntry<T>(values: T[], label: string): T {
 
   return value;
 }
+
+export async function waitForEntries(
+  producer: () => Promise<string[]>,
+  label: string,
+  timeoutMs = 2000,
+): Promise<string[]> {
+  return waitFor(async () => {
+    const values = await producer();
+    if (values.length === 0) {
+      throw new Error(`Expected at least one ${label}`);
+    }
+
+    return values;
+  }, timeoutMs);
+}
