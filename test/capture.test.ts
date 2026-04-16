@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 
 import { capturePromptRequest, redactHeaders, writeCaptureArtifacts } from "../src/capture.js";
 import { renderPromptCaptureHtml } from "../src/render.js";
+import { test } from "./harness.js";
 import { createTempDir, onlyEntry } from "./helpers.js";
 
 test("redactHeaders masks sensitive values", () => {

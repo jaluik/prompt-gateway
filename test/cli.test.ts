@@ -1,19 +1,18 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import path from "node:path";
-import test from "node:test";
 import { promisify } from "node:util";
+
+import { test } from "./harness.js";
 
 const execFileAsync = promisify(execFile);
 
 test("claude wrapper injects local ANTHROPIC_BASE_URL and preserves upstream", async () => {
-  const tsxCliPath = path.resolve("node_modules/tsx/dist/cli.mjs");
-  const cliPath = path.resolve("src/cli.ts");
+  const cliPath = path.resolve(".test-dist/src/cli.js");
 
   const { stdout } = await execFileAsync(
     process.execPath,
     [
-      tsxCliPath,
       cliPath,
       "claude",
       "--claude-command",
@@ -32,7 +31,7 @@ test("claude wrapper injects local ANTHROPIC_BASE_URL and preserves upstream", a
   );
 
   const lines = stdout.trim().split("\n");
-  const payloadLine = lines.at(-1);
+  const payloadLine = lines[lines.length - 1];
   assert.ok(payloadLine);
 
   const payload = JSON.parse(payloadLine) as {

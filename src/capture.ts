@@ -26,19 +26,28 @@ type PromptBody = {
   stream?: unknown;
 };
 
-export function redactHeaders(
-  headers: Headers | Record<string, string | string[] | undefined>,
-): RedactedHeaders {
-  const pairs: Array<[string, string]> =
-    headers instanceof Headers
-      ? Array.from(headers.entries())
-      : Object.entries(headers).flatMap(([key, value]) => {
-          if (typeof value === "undefined") {
-            return [];
-          }
+interface HeadersLike {
+  entries(): IterableIterator<[string, string]>;
+}
 
-          return [[key, Array.isArray(value) ? value.join(", ") : value] as [string, string]];
-        });
+function isHeadersLike(
+  value: HeadersLike | Record<string, string | string[] | undefined>,
+): value is HeadersLike {
+  return typeof (value as HeadersLike).entries === "function";
+}
+
+export function redactHeaders(
+  headers: HeadersLike | Record<string, string | string[] | undefined>,
+): RedactedHeaders {
+  const pairs: Array<[string, string]> = isHeadersLike(headers)
+    ? Array.from(headers.entries())
+    : Object.entries(headers).flatMap(([key, value]) => {
+        if (typeof value === "undefined") {
+          return [];
+        }
+
+        return [[key, Array.isArray(value) ? value.join(", ") : value] as [string, string]];
+      });
 
   return Object.fromEntries(
     pairs.map(([key, value]) => {

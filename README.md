@@ -4,6 +4,12 @@
 
 当前工程现在按无 scope 包 `prompt-gateway` 配置，可以直接发布为 npm 公共包并给外部使用。
 
+## Node 版本
+
+项目现在支持 `Node.js 16` 及以上版本。
+
+如果你从源码安装，建议同时使用支持 `Node 16` 的 `pnpm 8` 或更高兼容版本。
+
 ## 功能
 
 - 透明代理 `POST /v1/messages`

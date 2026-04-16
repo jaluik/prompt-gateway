@@ -1,13 +1,13 @@
 {
   "name": "prompt-gateway",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Local LLM gateway for capturing Claude Code prompt payloads.",
   "repository": {
     "type": "git",
     "url": "https://github.com/jaluik/prompt-tracker"
   },
   "type": "module",
-  "packageManager": "pnpm@10.7.1",
+  "packageManager": "pnpm@8.15.9",
   "files": [
     "dist",
     "README.md"
@@ -31,28 +31,29 @@
   "scripts": {
     "format": "biome format --write .",
     "check": "biome check .",
-    "build": "tsup",
+    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
     "commitlint": "commitlint --edit",
-    "dev": "tsx src/cli.ts",
+    "dev": "pnpm build && node dist/cli.js",
     "lint-staged": "lint-staged",
     "pack:dry": "pnpm pack --pack-destination ./.artifacts",
     "prepack": "pnpm build",
-    "prepare": "husky",
+    "prepare": "husky install",
     "start": "node dist/cli.js",
-    "test": "tsx --test test/*.test.ts"
+    "test": "node scripts/test.mjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=16"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.11",
-    "@commitlint/cli": "^20.5.0",
-    "@commitlint/config-conventional": "^20.5.0",
-    "@types/node": "^25.6.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.4.0",
-    "tsup": "^8.5.1",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "@commitlint/cli": "^17.8.1",
+    "@commitlint/config-conventional": "^17.8.1",
+    "@types/node": "^16.18.126",
+    "husky": "^8.0.3",
+    "lint-staged": "^13.3.0",
+    "typescript": "^5.9.3"
   }
 }

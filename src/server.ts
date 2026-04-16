@@ -1,7 +1,6 @@
 import http from "node:http";
-import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { ReadableStream as WebReadableStream } from "node:stream/web";
+import fetch, { Headers, type Response } from "node-fetch";
 
 import { capturePromptRequest, redactHeaders, writeCaptureArtifacts } from "./capture.js";
 import { renderPromptCaptureHtml } from "./render.js";
@@ -94,16 +93,15 @@ export function createGatewayServer(config: PromptGatewayConfig): http.Server {
       const upstreamResponse = await fetch(upstreamConfig.messagesUrl, {
         method: "POST",
         headers,
-        body: new Uint8Array(bodyBuffer),
-        duplex: "half",
-      } as RequestInit & { duplex: "half" });
+        body: bodyBuffer,
+      });
 
       upstreamStatus = upstreamResponse.status;
       upstreamOk = upstreamResponse.ok;
       writeResponseHead(res, upstreamResponse);
 
       if (upstreamResponse.body) {
-        await pipeline(Readable.fromWeb(upstreamResponse.body as WebReadableStream), res);
+        await pipeline(upstreamResponse.body, res);
       } else {
         res.end();
       }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 
 import { resolveUpstreamConfig } from "../src/upstream.js";
+import { test } from "./harness.js";
 
 test("resolveUpstreamConfig prefers explicit overrides", () => {
   const config = resolveUpstreamConfig(

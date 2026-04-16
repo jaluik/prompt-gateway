@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
-import test from "node:test";
+import fetch from "node-fetch";
 
 import { createGatewayServer } from "../src/server.js";
+import { test } from "./harness.js";
 import { close, createTempDir, listen, onlyEntry, waitForEntries } from "./helpers.js";
 
 test("gateway proxies a JSON messages request and writes artifacts", async () => {
@@ -51,7 +52,7 @@ test("gateway proxies a JSON messages request and writes artifacts", async () =>
     });
 
     assert.equal(response.status, 200);
-    const json = await response.json();
+    const json = (await response.json()) as { id?: string };
     assert.equal(json.id, "msg_123");
     assert.match(upstreamRequestBody, /hello proxy/);
 
