@@ -226,6 +226,7 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
   const child = spawn(claudeCommand, claudeArgs, {
     stdio: "inherit",
     env: childEnv,
+    shell: process.platform === "win32",
   });
 
   const cleanup = async (): Promise<void> => {

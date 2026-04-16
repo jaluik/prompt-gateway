@@ -26,6 +26,7 @@ test("claude wrapper injects local ANTHROPIC_BASE_URL and preserves upstream", a
       env: {
         ...process.env,
         ANTHROPIC_BASE_URL: "https://litellm.example.com/anthropic",
+        PROMPT_GATEWAY_PORT: "0",
       },
     },
   );
