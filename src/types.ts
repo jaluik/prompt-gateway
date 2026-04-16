@@ -52,6 +52,20 @@ export interface PromptCaptureRecord {
   };
 }
 
+export interface PromptCaptureListItem {
+  requestId: string;
+  capturedAt: string;
+  timestampMs: number;
+  sessionId: string | null;
+  model: string | null;
+  maxTokens: number | null;
+  stream: boolean;
+  status: number;
+  durationMs: number;
+  ok: boolean;
+  promptTextPreview: string;
+}
+
 export interface RenderPromptHtmlOptions {
   title?: string;
 }

@@ -31,8 +31,10 @@
   "scripts": {
     "format": "biome format --write .",
     "check": "biome check .",
-    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
+    "build:web": "vite build",
+    "build": "pnpm build:web && tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
     "commitlint": "commitlint --edit",
+    "dev:web": "vite",
     "dev": "pnpm build && node dist/cli.js",
     "lint-staged": "lint-staged",
     "pack:dry": "pnpm pack --pack-destination ./.artifacts",
@@ -42,18 +44,24 @@
     "test": "node scripts/test.mjs"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
   "dependencies": {
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.11",
     "@commitlint/cli": "^17.8.1",
     "@commitlint/config-conventional": "^17.8.1",
-    "@types/node": "^16.18.126",
+    "@types/node": "^18.19.87",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
     "husky": "^8.0.3",
     "lint-staged": "^13.3.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^5.4.19"
   }
 }

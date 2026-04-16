@@ -6,7 +6,7 @@ import fetch from "node-fetch";
 
 import { createGatewayServer } from "../src/server.js";
 import { test } from "./harness.js";
-import { close, createTempDir, listen, onlyEntry, waitForEntries } from "./helpers.js";
+import { close, createTempDir, listen, onlyEntry, waitFor, waitForEntries } from "./helpers.js";
 
 test("gateway proxies a JSON messages request and writes artifacts", async () => {
   const tempRoot = await createTempDir("prompt-gateway-server");
@@ -170,6 +170,69 @@ test("gateway records upstream failure responses", async () => {
 
     assert.equal(capture.response.status, 500);
     assert.equal(capture.response.ok, false);
+  } finally {
+    await close(gatewayInfo.server);
+    await close(upstreamInfo.server);
+  }
+});
+
+test("gateway exposes capture history APIs and browser shell", async () => {
+  const tempRoot = await createTempDir("prompt-gateway-browser");
+  const upstream = http.createServer((_, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+  });
+  const upstreamInfo = await listen(upstream);
+  const gateway = createGatewayServer({
+    host: "127.0.0.1",
+    port: 0,
+    outputRoot: tempRoot,
+    writeJson: true,
+    writeHtml: false,
+    htmlTitle: "Prompt Capture Browser",
+    upstreamOverrides: {
+      baseUrl: upstreamInfo.url,
+    },
+  });
+  const gatewayInfo = await listen(gateway);
+
+  try {
+    await fetch(`${gatewayInfo.url}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet",
+        messages: [{ role: "user", content: "browser test prompt" }],
+      }),
+    });
+
+    const listPayload = await waitFor(async () => {
+      const listResponse = await fetch(`${gatewayInfo.url}/api/captures`);
+      assert.equal(listResponse.status, 200);
+      const payload = (await listResponse.json()) as {
+        captures: Array<{ requestId: string; promptTextPreview: string }>;
+      };
+      if (payload.captures.length === 0) {
+        throw new Error("waiting for capture list");
+      }
+
+      return payload;
+    });
+    assert.equal(listPayload.captures.length, 1);
+    assert.match(listPayload.captures[0]?.promptTextPreview || "", /browser test prompt/);
+
+    const requestId = listPayload.captures[0]?.requestId;
+    assert.ok(requestId);
+
+    const detailResponse = await fetch(`${gatewayInfo.url}/api/captures/${requestId}`);
+    assert.equal(detailResponse.status, 200);
+    const detailPayload = (await detailResponse.json()) as { requestId: string };
+    assert.equal(detailPayload.requestId, requestId);
+
+    const appResponse = await fetch(`${gatewayInfo.url}/`);
+    assert.equal(appResponse.status, 200);
+    const appHtml = await appResponse.text();
+    assert.match(appHtml, /Prompt Gateway is almost ready|<div id="root"><\/div>/);
   } finally {
     await close(gatewayInfo.server);
     await close(upstreamInfo.server);

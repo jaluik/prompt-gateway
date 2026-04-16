@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 
-import { capturePromptRequest, redactHeaders, writeCaptureArtifacts } from "../src/capture.js";
+import {
+  capturePromptRequest,
+  getPromptCaptureById,
+  listPromptCaptures,
+  redactHeaders,
+  writeCaptureArtifacts,
+} from "../src/capture.js";
 import { renderPromptCaptureHtml } from "../src/render.js";
 import { test } from "./harness.js";
 import { createTempDir, onlyEntry } from "./helpers.js";
@@ -105,4 +111,66 @@ test("writeCaptureArtifacts creates dated output files", async () => {
   assert.ok(result.htmlPath);
   assert.match(onlyEntry([result.jsonPath], "json path"), /captures\/\d{4}-\d{2}-\d{2}\//);
   assert.match(onlyEntry([result.htmlPath], "html path"), /html\/\d{4}-\d{2}-\d{2}\//);
+});
+
+test("capture helpers list and resolve saved prompt captures", async () => {
+  const tempRoot = await createTempDir("prompt-gateway-list");
+  const first = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "session-a",
+      redactedHeaders: {},
+      body: {
+        model: "claude-haiku",
+        messages: [{ role: "user", content: "first prompt" }],
+      },
+    },
+    {
+      status: 200,
+      durationMs: 12,
+      ok: true,
+    },
+  );
+
+  const second = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "session-b",
+      redactedHeaders: {},
+      body: {
+        model: "claude-sonnet",
+        messages: [{ role: "user", content: "second prompt" }],
+      },
+    },
+    {
+      status: 500,
+      durationMs: 24,
+      ok: false,
+    },
+  );
+
+  await writeCaptureArtifacts(first, renderPromptCaptureHtml(first), {
+    outputRoot: tempRoot,
+    writeJson: true,
+    writeHtml: false,
+  });
+  await writeCaptureArtifacts(second, renderPromptCaptureHtml(second), {
+    outputRoot: tempRoot,
+    writeJson: true,
+    writeHtml: false,
+  });
+
+  const captures = await listPromptCaptures(tempRoot);
+  assert.equal(captures.length, 2);
+  assert.deepEqual(
+    captures.map((capture) => capture.requestId).sort(),
+    [first.requestId, second.requestId].sort(),
+  );
+  assert.ok(captures.some((capture) => /second prompt/.test(capture.promptTextPreview)));
+
+  const resolved = await getPromptCaptureById(tempRoot, first.requestId);
+  assert.equal(resolved?.requestId, first.requestId);
+  assert.match(resolved?.derived.promptTextPreview || "", /first prompt/);
 });

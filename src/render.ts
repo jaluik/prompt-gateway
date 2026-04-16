@@ -148,3 +148,68 @@ export function renderPromptCaptureHtml(
   </body>
 </html>`;
 }
+
+export function renderWebAppFallbackHtml(title = "Prompt Gateway"): string {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      :root {
+        --bg: #f6f1e8;
+        --card: rgba(255, 250, 242, 0.96);
+        --ink: #1f1b16;
+        --muted: #6a6157;
+        --line: rgba(140, 112, 78, 0.24);
+        --accent: #0f766e;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 28%),
+          linear-gradient(180deg, #fbf7f1 0%, var(--bg) 100%);
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      main {
+        max-width: 760px;
+        padding: 28px;
+        border-radius: 24px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        box-shadow: 0 16px 48px rgba(74, 58, 42, 0.1);
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        letter-spacing: -0.04em;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+      code {
+        font-family: "SFMono-Regular", "Menlo", monospace;
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Prompt Gateway is almost ready</h1>
+      <p>
+        The proxy is running, but the compiled web assets are missing. Run <code>pnpm build</code>
+        to bundle the React UI, then refresh this page.
+      </p>
+    </main>
+  </body>
+</html>`;
+}

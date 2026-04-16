@@ -4,3 +4,4 @@ dist/
 coverage/
 .artifacts/
 .tmp-verify
+.claude

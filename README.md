@@ -1,6 +1,6 @@
 # Claude Code Prompt Gateway
 
-本项目实现了一个本地 TypeScript LLM gateway，用来拦截 Claude Code 发往 `/v1/messages` 的最终请求体，并把请求记录为 JSON 与 HTML。
+本项目实现了一个本地 TypeScript LLM gateway，用来拦截 Claude Code 发往 `/v1/messages` 的最终请求体，并把请求记录为本地 JSON 数据，同时通过内置网页界面展示历史与详情。
 
 当前工程现在按无 scope 包 `prompt-gateway` 配置，可以直接发布为 npm 公共包并给外部使用。
 
@@ -15,7 +15,8 @@
 - 透明代理 `POST /v1/messages`
 - 默认脱敏敏感请求头
 - 记录完整 request body、session、响应状态与耗时
-- 生成单次请求详情 HTML，展示 `system`、`messages`、headers 摘要与原始 JSON
+- 内置本地浏览页面，首页展示历史记录列表，点击可查看单条 prompt 详情
+- 可选生成单次请求详情 HTML，展示 `system`、`messages`、headers 摘要与原始 JSON
 - 兼容流式和非流式上游响应
 
 ## 作为 npm 包使用
@@ -49,6 +50,12 @@ http://127.0.0.1:8787
 
 ```text
 .claude/prompt-gateway
+```
+
+启动后可以直接在浏览器打开：
+
+```text
+http://127.0.0.1:8787/
 ```
 
 最简单的启动方式：
@@ -101,6 +108,8 @@ http://127.0.0.1:8787
 - `.claude/prompt-gateway/captures/YYYY-MM-DD/*.json`
 - `.claude/prompt-gateway/html/YYYY-MM-DD/*.html`
 
+同时你也可以直接通过本地网页查看历史记录和详情，不需要手动打开导出的 HTML 文件。
+
 ## 无需改配置文件的启动方式
 
 如果你不想手改 Claude Code 配置文件，可以使用包装命令：
@@ -114,6 +123,8 @@ prompt-gateway claude
 - 启动本地 prompt gateway
 - 临时把 `ANTHROPIC_BASE_URL` 指到本地 gateway
 - 再启动 `claude`
+- 在终端明确提示当前 Claude Code 正在通过本地代理工作
+- 提供本地网页入口，方便实时查看 prompt 历史
 
 如果你原本已经配置了自定义 `ANTHROPIC_BASE_URL`，包装命令会把它保留下来并作为 gateway 的上游继续转发，所以 Anthropic-compatible 的自定义 base URL 仍然能被拦截。
 
@@ -139,8 +150,8 @@ prompt-gateway claude --claude-command /path/to/claude
 1. 启动代理：`npx prompt-gateway`
 2. 把 Claude Code 的 base URL 指到 `http://127.0.0.1:8787`
 3. 正常使用 Claude Code
-4. 打开生成结果：
-   `open .claude/prompt-gateway/html`
+4. 在浏览器打开本地记录页：
+   `http://127.0.0.1:8787/`
 
 如果你只想看 JSON，不生成 HTML：
 

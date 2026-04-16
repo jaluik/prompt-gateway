@@ -1,9 +1,18 @@
+import fs from "node:fs/promises";
 import http from "node:http";
+import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
 import fetch, { Headers, type Response } from "node-fetch";
 
-import { capturePromptRequest, redactHeaders, writeCaptureArtifacts } from "./capture.js";
-import { renderPromptCaptureHtml } from "./render.js";
+import {
+  capturePromptRequest,
+  getPromptCaptureById,
+  listPromptCaptures,
+  redactHeaders,
+  writeCaptureArtifacts,
+} from "./capture.js";
+import { renderPromptCaptureHtml, renderWebAppFallbackHtml } from "./render.js";
 import type { PromptGatewayConfig } from "./types.js";
 import { resolveUpstreamConfig } from "./upstream.js";
 
@@ -19,6 +28,18 @@ const HOP_BY_HOP_HEADERS = new Set([
   "host",
   "content-length",
 ]);
+
+const WEB_DIST_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "web");
+
+const CONTENT_TYPES: Record<string, string> = {
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".png": "image/png",
+};
 
 function getRequestPathname(url: string | undefined): string {
   if (!url) {
@@ -71,14 +92,104 @@ function writeResponseHead(res: http.ServerResponse, upstream: Response): void {
   res.statusMessage = upstream.statusText;
 }
 
+function writeJson(res: http.ServerResponse, payload: unknown, statusCode = 200): void {
+  res.statusCode = statusCode;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(payload));
+}
+
+function getContentType(filePath: string): string {
+  return CONTENT_TYPES[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+}
+
+function sanitizeAssetPath(requestPath: string): string | null {
+  const normalized = path.posix.normalize(requestPath);
+  if (normalized.includes("..")) {
+    return null;
+  }
+
+  return normalized.replace(/^\/+/, "");
+}
+
+async function readWebAsset(assetPath: string): Promise<Buffer | null> {
+  try {
+    return await fs.readFile(path.join(WEB_DIST_DIR, assetPath));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function serveWebApp(
+  res: http.ServerResponse,
+  requestPath: string,
+  htmlTitle: string,
+): Promise<boolean> {
+  if (requestPath.startsWith("/api/")) {
+    return false;
+  }
+
+  if (requestPath.startsWith("/assets/") || requestPath === "/favicon.ico") {
+    const assetPath = sanitizeAssetPath(requestPath);
+    if (!assetPath) {
+      writeJson(res, { error: "Invalid asset path" }, 400);
+      return true;
+    }
+
+    const file = await readWebAsset(assetPath);
+    if (!file) {
+      writeJson(res, { error: "Asset not found" }, 404);
+      return true;
+    }
+
+    res.statusCode = 200;
+    res.setHeader("content-type", getContentType(assetPath));
+    res.end(file);
+    return true;
+  }
+
+  if (requestPath === "/" || requestPath.startsWith("/captures/")) {
+    const indexFile = await readWebAsset("index.html");
+    res.statusCode = 200;
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    res.end(indexFile ? indexFile.toString("utf8") : renderWebAppFallbackHtml(htmlTitle));
+    return true;
+  }
+
+  return false;
+}
+
 export function createGatewayServer(config: PromptGatewayConfig): http.Server {
   return http.createServer(async (req, res) => {
     const requestPath = getRequestPathname(req.url);
 
+    if (req.method === "GET" && requestPath === "/api/captures") {
+      const captures = await listPromptCaptures(config.outputRoot);
+      writeJson(res, { captures });
+      return;
+    }
+
+    if (req.method === "GET" && requestPath.startsWith("/api/captures/")) {
+      const requestId = decodeURIComponent(requestPath.slice("/api/captures/".length));
+      const capture = await getPromptCaptureById(config.outputRoot, requestId);
+      if (!capture) {
+        writeJson(res, { error: "Capture not found" }, 404);
+        return;
+      }
+
+      writeJson(res, capture);
+      return;
+    }
+
+    if (req.method === "GET" && (await serveWebApp(res, requestPath, config.htmlTitle))) {
+      return;
+    }
+
     if (req.method !== "POST" || requestPath !== "/v1/messages") {
-      res.statusCode = 404;
-      res.setHeader("content-type", "application/json; charset=utf-8");
-      res.end(JSON.stringify({ error: "Not found" }));
+      writeJson(res, { error: "Not found" }, 404);
       return;
     }
 

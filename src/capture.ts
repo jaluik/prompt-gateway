@@ -5,6 +5,7 @@ import path from "node:path";
 import type {
   CaptureRequestMeta,
   CaptureResponseMeta,
+  PromptCaptureListItem,
   PromptCaptureRecord,
   PromptGatewayConfig,
   RedactedHeaders,
@@ -170,4 +171,95 @@ export async function writeCaptureArtifacts(
   }
 
   return { jsonPath, htmlPath };
+}
+
+function toListItem(record: PromptCaptureRecord): PromptCaptureListItem {
+  return {
+    requestId: record.requestId,
+    capturedAt: record.capturedAt,
+    timestampMs: record.timestampMs,
+    sessionId: record.sessionId,
+    model: record.derived.model,
+    maxTokens: record.derived.maxTokens,
+    stream: record.derived.stream,
+    status: record.response.status,
+    durationMs: record.response.durationMs,
+    ok: record.response.ok,
+    promptTextPreview: record.derived.promptTextPreview,
+  };
+}
+
+async function listDayDirectories(capturesRoot: string): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(capturesRoot, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+      .reverse();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+async function readCaptureFile(filePath: string): Promise<PromptCaptureRecord | null> {
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    return JSON.parse(raw) as PromptCaptureRecord;
+  } catch {
+    return null;
+  }
+}
+
+export async function listPromptCaptures(outputRoot: string): Promise<PromptCaptureListItem[]> {
+  const capturesRoot = path.join(outputRoot, "captures");
+  const days = await listDayDirectories(capturesRoot);
+  const records: PromptCaptureListItem[] = [];
+
+  for (const day of days) {
+    const dayDir = path.join(capturesRoot, day);
+    const files = (await fs.readdir(dayDir))
+      .filter((file) => file.endsWith(".json"))
+      .sort()
+      .reverse();
+
+    for (const file of files) {
+      const record = await readCaptureFile(path.join(dayDir, file));
+      if (record) {
+        records.push(toListItem(record));
+      }
+    }
+  }
+
+  return records.sort((left, right) => right.timestampMs - left.timestampMs);
+}
+
+export async function getPromptCaptureById(
+  outputRoot: string,
+  requestId: string,
+): Promise<PromptCaptureRecord | null> {
+  const capturesRoot = path.join(outputRoot, "captures");
+  const days = await listDayDirectories(capturesRoot);
+
+  for (const day of days) {
+    const dayDir = path.join(capturesRoot, day);
+    const files = await fs.readdir(dayDir);
+
+    for (const file of files) {
+      if (!file.endsWith(".json")) {
+        continue;
+      }
+
+      const record = await readCaptureFile(path.join(dayDir, file));
+      if (record?.requestId === requestId) {
+        return record;
+      }
+    }
+  }
+
+  return null;
 }

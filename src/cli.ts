@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { createGatewayServer } from "./server.js";
 import type { PromptGatewayConfig } from "./types.js";
+import { resolveUpstreamConfig } from "./upstream.js";
 
 interface CliOverrides {
   host?: string;
@@ -168,9 +169,19 @@ async function serve(overrides: CliOverrides): Promise<void> {
   const config = getConfig(overrides);
   const server = createGatewayServer(config);
   const address = await listenServer(server, config.host, config.port);
+  const upstream = resolveUpstreamConfig(process.env, config.upstreamOverrides);
 
   process.stdout.write(
-    `[prompt-gateway] listening on ${address.url} -> output ${config.outputRoot}\n`,
+    [
+      "🚀 Prompt Gateway is live",
+      `🔀 Proxy target: ${upstream.baseUrl}`,
+      `🌐 Local gateway: ${address.url}`,
+      `📝 Capture store: ${config.outputRoot}`,
+      `👀 Open history: ${address.url}/`,
+      "",
+      "Claude Code requests sent to this gateway will now be captured locally.",
+      "",
+    ].join("\n"),
   );
 }
 
@@ -210,8 +221,18 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
 
   const server = createGatewayServer(config);
   const address = await listenServer(server, config.host, config.port);
+  const viewerUrl = `${address.url}/`;
   process.stdout.write(
-    `[prompt-gateway] wrapping Claude with gateway ${address.url} -> upstream ${upstreamBaseUrl || "https://api.anthropic.com"}\n`,
+    [
+      "🚀 Prompt Gateway wrapped Claude Code",
+      `🤖 Claude Code now talks to: ${address.url}`,
+      `🔀 Real upstream stays at: ${upstreamBaseUrl || "https://api.anthropic.com"}`,
+      `📝 Captures will be saved in: ${config.outputRoot}`,
+      `🌐 Inspect prompts in your browser: ${viewerUrl}`,
+      "",
+      "Your current Claude Code session is now flowing through the local proxy.",
+      "",
+    ].join("\n"),
   );
 
   const childEnv: NodeJS.ProcessEnv = {
