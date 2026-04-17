@@ -652,11 +652,11 @@ pre {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
   background: rgba(15, 23, 42, 0.58);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 40;
+  z-index: 999;
 }
 
 .modal-dismiss {
@@ -668,16 +668,19 @@ pre {
 
 .modal-panel {
   position: relative;
-  width: min(1120px, calc(100vw - 40px));
-  height: min(88vh, 960px);
+  width: min(1280px, calc(100vw - 48px));
+  max-width: 100%;
+  height: min(90dvh, 980px);
+  max-height: calc(100dvh - 48px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 16px;
-  padding: 22px;
+  padding: 24px;
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
   border-radius: 22px;
   background: linear-gradient(180deg, var(--surface-strong), var(--surface));
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
 .modal-header {
@@ -704,7 +707,8 @@ pre {
 
   .modal-panel {
     width: calc(100vw - 24px);
-    height: min(92vh, 960px);
+    height: min(94dvh, 960px);
+    max-height: calc(100dvh - 24px);
     padding: 16px;
     border-radius: 18px;
   }

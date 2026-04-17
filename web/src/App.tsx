@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 type CaptureListItem = {
   requestId: string;
@@ -489,6 +490,33 @@ function TextBlock({
     };
   }, [isOpen]);
 
+  const modal = isOpen ? (
+    <div aria-modal="true" className="modal-backdrop" role="dialog">
+      <button
+        aria-label={closeText}
+        className="modal-dismiss"
+        onClick={() => setIsOpen(false)}
+        type="button"
+      />
+      <div className="modal-panel">
+        <div className="modal-header">
+          <div className="text-block-meta">
+            <span className="pill">{block.label ?? block.type}</span>
+            {block.label && block.type !== "text" ? (
+              <span className="hint">{block.type}</span>
+            ) : null}
+          </div>
+          <button className="ghost-button" onClick={() => setIsOpen(false)} type="button">
+            {closeText}
+          </button>
+        </div>
+        <div className="modal-content">
+          <pre>{block.text}</pre>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       <article className="text-block">
@@ -508,32 +536,7 @@ function TextBlock({
         )}
       </article>
 
-      {isOpen ? (
-        <div aria-modal="true" className="modal-backdrop" role="dialog">
-          <button
-            aria-label={closeText}
-            className="modal-dismiss"
-            onClick={() => setIsOpen(false)}
-            type="button"
-          />
-          <div className="modal-panel">
-            <div className="modal-header">
-              <div className="text-block-meta">
-                <span className="pill">{block.label ?? block.type}</span>
-                {block.label && block.type !== "text" ? (
-                  <span className="hint">{block.type}</span>
-                ) : null}
-              </div>
-              <button className="ghost-button" onClick={() => setIsOpen(false)} type="button">
-                {closeText}
-              </button>
-            </div>
-            <div className="modal-content">
-              <pre>{block.text}</pre>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {modal && typeof document !== "undefined" ? createPortal(modal, document.body) : null}
     </>
   );
 }
