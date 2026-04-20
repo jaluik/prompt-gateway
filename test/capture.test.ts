@@ -51,9 +51,102 @@ test("capturePromptRequest extracts prompt metadata", () => {
   assert.equal(record.derived.model, "claude-sonnet");
   assert.equal(record.derived.maxTokens, 2048);
   assert.equal(record.derived.stream, true);
-  assert.match(record.derived.promptTextPreview, /system prompt/);
-  assert.match(record.derived.promptTextPreview, /hello/);
+  assert.equal(record.derived.promptTextPreview, "hello");
   assert.equal(record.response.body.raw && typeof record.response.body.raw, "object");
+});
+
+test("capturePromptRequest prefers the last text block in user messages for prompt preview", () => {
+  const record = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "session-456",
+      redactedHeaders: {},
+      body: {
+        system: "shared instructions",
+        messages: [
+          { role: "assistant", content: "previous reply" },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "first distinguishing question" },
+              { type: "text", text: "extra context" },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "later user prompt" },
+              { type: "text", text: "final distinguishing prompt" },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      status: 200,
+      durationMs: 18,
+      ok: true,
+      body: null,
+    },
+  );
+
+  assert.equal(record.derived.promptTextPreview, "final distinguishing prompt");
+});
+
+test("capturePromptRequest prefers the last text block within a single user message", () => {
+  const record = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "session-457",
+      redactedHeaders: {},
+      body: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "system reminder one" },
+              { type: "text", text: "system reminder two" },
+              { type: "text", text: "Reply with exactly: prompt-gateway smoke test" },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      status: 200,
+      durationMs: 5,
+      ok: true,
+      body: null,
+    },
+  );
+
+  assert.equal(record.derived.promptTextPreview, "Reply with exactly: prompt-gateway smoke test");
+});
+
+test("capturePromptRequest falls back when no user message text is available", () => {
+  const record = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "session-789",
+      redactedHeaders: {},
+      body: {
+        system: "system fallback",
+        messages: [{ role: "assistant", content: "assistant only" }],
+      },
+    },
+    {
+      status: 200,
+      durationMs: 7,
+      ok: true,
+      body: null,
+    },
+  );
+
+  assert.match(record.derived.promptTextPreview, /system fallback/);
+  assert.match(record.derived.promptTextPreview, /assistant only/);
 });
 
 test("renderPromptCaptureHtml includes key fields", () => {
@@ -179,4 +272,58 @@ test("capture helpers list and resolve saved prompt captures", async () => {
   const resolved = await getPromptCaptureById(tempRoot, first.requestId);
   assert.equal(resolved?.requestId, first.requestId);
   assert.match(resolved?.derived.promptTextPreview || "", /first prompt/);
+});
+
+test("capture helpers recompute preview for older saved captures", async () => {
+  const tempRoot = await createTempDir("prompt-gateway-legacy-preview");
+  const record = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "session-legacy",
+      redactedHeaders: {},
+      body: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "legacy reminder" },
+              { type: "text", text: "Reply with exactly: prompt-gateway smoke test" },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      status: 200,
+      durationMs: 3,
+      ok: true,
+      body: null,
+    },
+  );
+
+  await writeCaptureArtifacts(
+    {
+      ...record,
+      derived: {
+        ...record.derived,
+        promptTextPreview: "legacy preview value",
+      },
+    },
+    renderPromptCaptureHtml(record),
+    {
+      outputRoot: tempRoot,
+      writeJson: true,
+      writeHtml: false,
+    },
+  );
+
+  const captures = await listPromptCaptures(tempRoot);
+  assert.equal(captures[0]?.promptTextPreview, "Reply with exactly: prompt-gateway smoke test");
+
+  const resolved = await getPromptCaptureById(tempRoot, record.requestId);
+  assert.equal(
+    resolved?.derived.promptTextPreview,
+    "Reply with exactly: prompt-gateway smoke test",
+  );
 });

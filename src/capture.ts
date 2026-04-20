@@ -66,7 +66,55 @@ function asPromptBody(body: unknown): PromptBody {
   return {};
 }
 
+function previewText(text: string): string {
+  return text.slice(0, 1200);
+}
+
+function getLastUserMessagePreview(messages: unknown): string | null {
+  if (!Array.isArray(messages)) {
+    return null;
+  }
+
+  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const message = messages[messageIndex];
+    if (message?.role !== "user") {
+      continue;
+    }
+
+    if (typeof message.content === "string") {
+      const normalized = message.content.trim();
+      if (normalized) {
+        return previewText(normalized);
+      }
+      continue;
+    }
+
+    if (!Array.isArray(message.content)) {
+      continue;
+    }
+
+    for (let contentIndex = message.content.length - 1; contentIndex >= 0; contentIndex -= 1) {
+      const part = message.content[contentIndex] as { text?: unknown };
+      if (typeof part?.text !== "string") {
+        continue;
+      }
+
+      const normalized = part.text.trim();
+      if (normalized) {
+        return previewText(normalized);
+      }
+    }
+  }
+
+  return null;
+}
+
 function previewPrompt(body: PromptBody): string {
+  const lastUserMessagePreview = getLastUserMessagePreview(body?.messages);
+  if (lastUserMessagePreview) {
+    return lastUserMessagePreview;
+  }
+
   const segments: string[] = [];
 
   if (typeof body?.system === "string") {
@@ -98,7 +146,19 @@ function previewPrompt(body: PromptBody): string {
     }
   }
 
-  return segments.join("\n\n").slice(0, 1200);
+  return previewText(segments.join("\n\n"));
+}
+
+function normalizeCaptureRecord(record: PromptCaptureRecord): PromptCaptureRecord {
+  const body = asPromptBody(record.requestBody?.raw);
+
+  return {
+    ...record,
+    derived: {
+      ...record.derived,
+      promptTextPreview: previewPrompt(body),
+    },
+  };
 }
 
 export function capturePromptRequest(
@@ -214,7 +274,7 @@ async function listDayDirectories(capturesRoot: string): Promise<string[]> {
 async function readCaptureFile(filePath: string): Promise<PromptCaptureRecord | null> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
-    return JSON.parse(raw) as PromptCaptureRecord;
+    return normalizeCaptureRecord(JSON.parse(raw) as PromptCaptureRecord);
   } catch {
     return null;
   }

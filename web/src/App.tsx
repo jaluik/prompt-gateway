@@ -104,7 +104,7 @@ const COPY = {
     recentCapturesDesc: "Search by model, session, prompt text, or request outcome.",
     shown: "shown",
     search: "Search",
-    searchPlaceholder: "model, session, preview, success...",
+    searchPlaceholder: "model, session, user input, success...",
     loadingHistory: "Loading capture history...",
     loadingDetails: "Loading prompt details...",
     noCaptures:
@@ -114,11 +114,11 @@ const COPY = {
     tableModel: "Model",
     tableCaptured: "Captured",
     tableDuration: "Duration",
-    tablePreview: "Preview",
+    tablePreview: "User Input",
     success: "Success",
     error: "Error",
     unknownModel: "Unknown model",
-    noPreview: "No prompt preview available.",
+    noPreview: "No user input available.",
     requestFacts: "Request Facts",
     requestFactsDesc: "The fields you usually need first when debugging behavior.",
     systemPrompt: "System Prompt",
@@ -128,8 +128,8 @@ const COPY = {
     modelResponse: "Model Response",
     modelResponseDesc:
       "Assistant-role history included in the request, plus the current upstream response state.",
-    promptPreview: "Prompt Preview",
-    promptPreviewDesc: "Fast overview of the prompt text that was sent upstream.",
+    promptPreview: "User Input",
+    promptPreviewDesc: "Shows the latest user text sent upstream in this request.",
     readablePrompt: "Readable Prompt",
     readablePromptDesc: "Normalized for reading while preserving the original request semantics.",
     system: "System",
@@ -202,7 +202,7 @@ const COPY = {
     recentCapturesDesc: "支持按模型、会话、Prompt 文本和请求结果搜索。",
     shown: "条已显示",
     search: "搜索",
-    searchPlaceholder: "模型、会话、preview、成功/失败...",
+    searchPlaceholder: "模型、会话、用户输入、成功/失败...",
     loadingHistory: "正在加载记录历史...",
     loadingDetails: "正在加载请求详情...",
     noCaptures: "还没有捕获到 Prompt。请通过 gateway 启动 Claude Code，列表会自动出现内容。",
@@ -211,11 +211,11 @@ const COPY = {
     tableModel: "模型",
     tableCaptured: "捕获时间",
     tableDuration: "耗时",
-    tablePreview: "预览",
+    tablePreview: "用户输入",
     success: "成功",
     error: "失败",
     unknownModel: "未知模型",
-    noPreview: "暂无 Prompt 预览。",
+    noPreview: "暂无用户输入。",
     requestFacts: "请求关键信息",
     requestFactsDesc: "调试请求时最常用的一组字段。",
     systemPrompt: "系统 Prompt",
@@ -224,8 +224,8 @@ const COPY = {
     userPromptDesc: "这次请求发往上游的 `user` 角色消息。",
     modelResponse: "模型响应",
     modelResponseDesc: "请求中携带的历史 `assistant` 消息，以及这次调用的响应状态。",
-    promptPreview: "Prompt 预览",
-    promptPreviewDesc: "快速查看这次请求发送到上游的核心文本内容。",
+    promptPreview: "用户输入",
+    promptPreviewDesc: "展示这次请求里发送到上游的最后一段用户文本。",
     readablePrompt: "可读 Prompt",
     readablePromptDesc: "在不改变原始语义的前提下，转换成更适合人阅读的结构。",
     system: "系统提示",
@@ -865,7 +865,7 @@ function CaptureTable({
 
       {captures.map((capture) => (
         <button
-          className="capture-row"
+          className={capture.ok ? "capture-row capture-row-ok" : "capture-row capture-row-error"}
           key={capture.requestId}
           onClick={() => navigate(`/captures/${capture.requestId}`)}
           type="button"
