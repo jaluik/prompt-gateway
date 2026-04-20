@@ -469,6 +469,7 @@ pre {
 }
 
 .capture-row {
+  --row-accent: var(--accent);
   width: 100%;
   padding: 16px 18px;
   border: 0;
@@ -481,6 +482,14 @@ pre {
     box-shadow 180ms ease;
 }
 
+.capture-row-ok {
+  --row-accent: var(--success);
+}
+
+.capture-row-error {
+  --row-accent: var(--danger);
+}
+
 .capture-row:last-child {
   border-bottom: 0;
 }
@@ -489,7 +498,7 @@ pre {
 .capture-row:focus-visible {
   background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface-strong));
   box-shadow:
-    inset 3px 0 0 var(--accent),
+    inset 3px 0 0 var(--row-accent),
     inset 0 1px 0 color-mix(in srgb, var(--accent-soft) 30%, transparent);
   outline: none;
 }
