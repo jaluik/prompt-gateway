@@ -326,6 +326,28 @@ function ThemeIcon({ theme }: { theme: Theme }): ReactNode {
   );
 }
 
+function BackToCapturesIcon(): ReactNode {
+  return (
+    <svg aria-hidden="true" className="control-icon" viewBox="0 0 24 24">
+      <path
+        d="M10 7 5 12l5 5M6 12h6.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M14.5 8h4.75M14.5 12h4.75M14.5 16h4.75"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
 function normalizeText(value: string | null | undefined): string {
   if (typeof value !== "string") {
     return "";
@@ -1205,8 +1227,14 @@ export function App() {
           action={
             <>
               {controls}
-              <button className="ghost-button" onClick={() => navigate("/")} type="button">
-                {copy.backToCaptures}
+              <button
+                aria-label={copy.backToCaptures}
+                className="icon-toggle"
+                onClick={() => navigate("/")}
+                title={copy.backToCaptures}
+                type="button"
+              >
+                <BackToCapturesIcon />
               </button>
             </>
           }
