@@ -8,6 +8,7 @@ import type {
   PromptCaptureListItem,
   PromptCaptureRecord,
   PromptGatewayConfig,
+  PromptSessionListItem,
   RedactedHeaders,
 } from "./types.js";
 
@@ -281,9 +282,14 @@ async function readCaptureFile(filePath: string): Promise<PromptCaptureRecord | 
 }
 
 export async function listPromptCaptures(outputRoot: string): Promise<PromptCaptureListItem[]> {
+  const records = await listPromptCaptureRecords(outputRoot);
+  return records.map(toListItem).sort((left, right) => right.timestampMs - left.timestampMs);
+}
+
+async function listPromptCaptureRecords(outputRoot: string): Promise<PromptCaptureRecord[]> {
   const capturesRoot = path.join(outputRoot, "captures");
   const days = await listDayDirectories(capturesRoot);
-  const records: PromptCaptureListItem[] = [];
+  const records: PromptCaptureRecord[] = [];
 
   for (const day of days) {
     const dayDir = path.join(capturesRoot, day);
@@ -295,12 +301,61 @@ export async function listPromptCaptures(outputRoot: string): Promise<PromptCapt
     for (const file of files) {
       const record = await readCaptureFile(path.join(dayDir, file));
       if (record) {
-        records.push(toListItem(record));
+        records.push(record);
       }
     }
   }
 
   return records.sort((left, right) => right.timestampMs - left.timestampMs);
+}
+
+export async function listPromptSessions(outputRoot: string): Promise<PromptSessionListItem[]> {
+  const records = await listPromptCaptureRecords(outputRoot);
+  const sessions = new Map<string, PromptCaptureRecord[]>();
+
+  for (const record of records) {
+    const key = record.sessionId ?? "";
+    sessions.set(key, [...(sessions.get(key) ?? []), record]);
+  }
+
+  return Array.from(sessions.values())
+    .map((sessionRecords) => {
+      const sorted = [...sessionRecords].sort(
+        (left, right) => right.timestampMs - left.timestampMs,
+      );
+      const latest = sorted[0];
+      const models = Array.from(
+        new Set(
+          sorted
+            .map((record) => record.derived.model)
+            .filter((model): model is string => Boolean(model)),
+        ),
+      );
+
+      return {
+        sessionId: latest.sessionId,
+        latestCapturedAt: latest.capturedAt,
+        latestTimestampMs: latest.timestampMs,
+        requestCount: sorted.length,
+        successCount: sorted.filter((record) => record.response.ok).length,
+        errorCount: sorted.filter((record) => !record.response.ok).length,
+        streamCount: sorted.filter((record) => record.derived.stream).length,
+        durationMs: sorted.reduce((total, record) => total + record.response.durationMs, 0),
+        models,
+        promptTextPreview: latest.derived.promptTextPreview,
+      };
+    })
+    .sort((left, right) => right.latestTimestampMs - left.latestTimestampMs);
+}
+
+export async function listPromptCapturesBySessionId(
+  outputRoot: string,
+  sessionId: string | null,
+): Promise<PromptCaptureRecord[]> {
+  const records = await listPromptCaptureRecords(outputRoot);
+  return records
+    .filter((record) => record.sessionId === sessionId)
+    .sort((left, right) => left.timestampMs - right.timestampMs);
 }
 
 export async function getPromptCaptureById(

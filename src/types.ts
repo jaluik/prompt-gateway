@@ -69,6 +69,19 @@ export interface PromptCaptureListItem {
   promptTextPreview: string;
 }
 
+export interface PromptSessionListItem {
+  sessionId: string | null;
+  latestCapturedAt: string;
+  latestTimestampMs: number;
+  requestCount: number;
+  successCount: number;
+  errorCount: number;
+  streamCount: number;
+  durationMs: number;
+  models: string[];
+  promptTextPreview: string;
+}
+
 export interface RenderPromptHtmlOptions {
   title?: string;
 }

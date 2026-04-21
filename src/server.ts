@@ -8,6 +8,8 @@ import {
   capturePromptRequest,
   getPromptCaptureById,
   listPromptCaptures,
+  listPromptCapturesBySessionId,
+  listPromptSessions,
   redactHeaders,
   writeCaptureArtifacts,
 } from "./capture.js";
@@ -186,7 +188,11 @@ async function serveWebApp(
     return true;
   }
 
-  if (requestPath === "/" || requestPath.startsWith("/captures/")) {
+  if (
+    requestPath === "/" ||
+    requestPath.startsWith("/captures/") ||
+    requestPath.startsWith("/sessions/")
+  ) {
     const indexFile = await readWebAsset("index.html");
     res.statusCode = 200;
     res.setHeader("content-type", "text/html; charset=utf-8");
@@ -204,6 +210,26 @@ export function createGatewayServer(config: PromptGatewayConfig): http.Server {
     if (req.method === "GET" && requestPath === "/api/captures") {
       const captures = await listPromptCaptures(config.outputRoot);
       writeJson(res, { captures });
+      return;
+    }
+
+    if (req.method === "GET" && requestPath === "/api/sessions") {
+      const sessions = await listPromptSessions(config.outputRoot);
+      writeJson(res, { sessions });
+      return;
+    }
+
+    if (req.method === "GET" && requestPath.startsWith("/api/sessions/")) {
+      const encodedSessionId = requestPath.slice("/api/sessions/".length);
+      const sessionId =
+        encodedSessionId === "~missing" ? null : decodeURIComponent(encodedSessionId);
+      const captures = await listPromptCapturesBySessionId(config.outputRoot, sessionId);
+      if (captures.length === 0) {
+        writeJson(res, { error: "Session not found" }, 404);
+        return;
+      }
+
+      writeJson(res, { sessionId, captures });
       return;
     }
 

@@ -4,6 +4,8 @@ import {
   capturePromptRequest,
   getPromptCaptureById,
   listPromptCaptures,
+  listPromptCapturesBySessionId,
+  listPromptSessions,
   redactHeaders,
   writeCaptureArtifacts,
 } from "../src/capture.js";
@@ -272,6 +274,94 @@ test("capture helpers list and resolve saved prompt captures", async () => {
   const resolved = await getPromptCaptureById(tempRoot, first.requestId);
   assert.equal(resolved?.requestId, first.requestId);
   assert.match(resolved?.derived.promptTextPreview || "", /first prompt/);
+});
+
+test("capture helpers group saved captures by Claude Code session", async () => {
+  const tempRoot = await createTempDir("prompt-gateway-sessions");
+  const first = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "session-a",
+      redactedHeaders: {},
+      body: {
+        model: "claude-haiku",
+        messages: [{ role: "user", content: "first prompt" }],
+      },
+    },
+    {
+      status: 200,
+      durationMs: 12,
+      ok: true,
+      body: null,
+    },
+  );
+  const second = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "session-a",
+      redactedHeaders: {},
+      body: {
+        model: "claude-sonnet",
+        stream: true,
+        messages: [{ role: "user", content: "second prompt" }],
+      },
+    },
+    {
+      status: 500,
+      durationMs: 24,
+      ok: false,
+      body: null,
+    },
+  );
+  const other = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "session-b",
+      redactedHeaders: {},
+      body: {
+        model: "claude-sonnet",
+        messages: [{ role: "user", content: "other prompt" }],
+      },
+    },
+    {
+      status: 200,
+      durationMs: 8,
+      ok: true,
+      body: null,
+    },
+  );
+  first.timestampMs = Date.parse("2026-04-20T00:00:00.000Z");
+  first.capturedAt = "2026-04-20T00:00:00.000Z";
+  second.timestampMs = Date.parse("2026-04-20T00:01:00.000Z");
+  second.capturedAt = "2026-04-20T00:01:00.000Z";
+  other.timestampMs = Date.parse("2026-04-20T00:02:00.000Z");
+  other.capturedAt = "2026-04-20T00:02:00.000Z";
+
+  for (const record of [first, second, other]) {
+    await writeCaptureArtifacts(record, renderPromptCaptureHtml(record), {
+      outputRoot: tempRoot,
+      writeJson: true,
+      writeHtml: false,
+    });
+  }
+
+  const sessions = await listPromptSessions(tempRoot);
+  const sessionA = sessions.find((session) => session.sessionId === "session-a");
+  assert.equal(sessionA?.requestCount, 2);
+  assert.equal(sessionA?.successCount, 1);
+  assert.equal(sessionA?.errorCount, 1);
+  assert.equal(sessionA?.streamCount, 1);
+  assert.equal(sessionA?.durationMs, 36);
+  assert.deepEqual(sessionA?.models.sort(), ["claude-haiku", "claude-sonnet"]);
+
+  const captures = await listPromptCapturesBySessionId(tempRoot, "session-a");
+  assert.deepEqual(
+    captures.map((capture) => capture.requestId),
+    [first.requestId, second.requestId],
+  );
 });
 
 test("capture helpers recompute preview for older saved captures", async () => {

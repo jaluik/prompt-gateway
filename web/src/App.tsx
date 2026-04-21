@@ -1,17 +1,16 @@
 import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
-type CaptureListItem = {
-  requestId: string;
-  capturedAt: string;
-  timestampMs: number;
+type SessionListItem = {
   sessionId: string | null;
-  model: string | null;
-  maxTokens: number | null;
-  stream: boolean;
-  status: number;
+  latestCapturedAt: string;
+  latestTimestampMs: number;
+  requestCount: number;
+  successCount: number;
+  errorCount: number;
+  streamCount: number;
   durationMs: number;
-  ok: boolean;
+  models: string[];
   promptTextPreview: string;
 };
 
@@ -53,7 +52,7 @@ type Route =
     }
   | {
       name: "detail";
-      requestId: string;
+      sessionId: string | null;
     };
 
 type MessageBlock = {
@@ -69,9 +68,18 @@ type MessageItem = {
   blocks: MessageBlock[];
 };
 
+type TimelineEntry = {
+  id: string;
+  role: string;
+  title: string;
+  description: string;
+  blocks: MessageBlock[];
+  meta: string[];
+  tone: "system" | "user" | "assistant" | "response" | "unknown";
+};
+
 type Language = "en" | "zh";
 type Theme = "light" | "dark";
-type DetailTab = "system" | "user" | "response";
 
 const COLLAPSE_THRESHOLD = 600;
 const LANGUAGE_STORAGE_KEY = "prompt-gateway-language";
@@ -80,8 +88,8 @@ const THEME_STORAGE_KEY = "prompt-gateway-theme";
 const COPY = {
   en: {
     appTitle: "Prompt Gateway",
-    appSubtitle: "Local viewer for Claude Code prompt captures",
-    detailSubtitle: "Readable request inspection",
+    appSubtitle: "Local viewer for Claude Code request sessions",
+    detailSubtitle: "What Claude Code sent to the model",
     backToCaptures: "Back to captures",
     languageEn: "EN",
     languageZh: "中文",
@@ -92,16 +100,18 @@ const COPY = {
     heroEyebrow: "Capture Dashboard",
     heroTitle: "Prompt capture dashboard",
     heroText:
-      "Scan recent requests, spot failures quickly, and open a readable breakdown without leaving the browser.",
-    detailEyebrow: "Request Detail",
-    detailTitle: "Inspect one captured request",
+      "Scan recent Claude Code sessions, spot failures quickly, and open the full conversation context without leaving the browser.",
+    detailEyebrow: "Session Detail",
+    detailTitle: "Inspect one Claude Code request session",
     detailText:
-      "The main column focuses on readable prompt content. The sidebar keeps request facts and raw payloads nearby without interrupting the reading flow.",
-    captures: "Captures",
+      "The main column follows every captured request in this session. The sidebar keeps session facts and raw payloads nearby.",
+    captures: "Requests",
+    sessions: "Sessions",
     successful: "Successful",
     streaming: "Streaming",
-    recentCaptures: "Recent Captures",
-    recentCapturesDesc: "Search by model, session, prompt text, or request outcome.",
+    recentCaptures: "Claude Code Request Sessions",
+    recentCapturesDesc:
+      "Each row is one Claude Code session. Open it to inspect every /v1/messages request and its full prompt payload.",
     shown: "shown",
     search: "Search",
     searchPlaceholder: "model, session, user input, success...",
@@ -111,27 +121,42 @@ const COPY = {
       "No prompts captured yet. Start Claude Code through the gateway and this list will fill in automatically.",
     noSearchResults: "No captures matched your search.",
     tableStatus: "Status",
+    tableSession: "Session",
+    tableRequests: "Requests",
     tableModel: "Model",
-    tableCaptured: "Captured",
+    tableCaptured: "Latest capture",
     tableDuration: "Duration",
-    tablePreview: "User Input",
+    tablePreview: "Latest user input preview",
     success: "Success",
     error: "Error",
     unknownModel: "Unknown model",
-    noPreview: "No user input available.",
-    requestFacts: "Request Facts",
-    requestFactsDesc: "The fields you usually need first when debugging behavior.",
+    noPreview: "No latest user input available.",
+    requestFacts: "Session summary",
+    requestFactsDesc: "A short summary of this Claude Code session.",
     systemPrompt: "System Prompt",
     systemPromptDesc: "System instructions included in this captured request.",
-    userPrompt: "User Prompt",
-    userPromptDesc: "User-role messages that were sent upstream in this request.",
+    userPrompt: "User input sent in this request",
+    userPromptDesc:
+      "The last user-role message in this request. The full prompt payload also includes system instructions and history.",
     modelResponse: "Model Response",
     modelResponseDesc:
       "Assistant-role history included in the request, plus the current upstream response state.",
-    promptPreview: "User Input",
+    promptPreview: "Latest user input",
     promptPreviewDesc: "Shows the latest user text sent upstream in this request.",
     readablePrompt: "Readable Prompt",
     readablePromptDesc: "Normalized for reading while preserving the original request semantics.",
+    promptTimeline: "Prompt Timeline",
+    promptTimelineDesc:
+      "Reads the captured request in the same order the context was sent upstream.",
+    requestContext: "Request context",
+    requestMessage: "Message",
+    requestShort: "Request",
+    sessionTimeline: "Captured requests",
+    sessionTimelineDesc: "Each card is one request Claude Code sent through prompt-gateway.",
+    collapseAll: "Collapse all",
+    expandAll: "Expand all",
+    collapseEntry: "Collapse",
+    expandEntry: "Expand",
     system: "System",
     messages: "Messages",
     noReadableBlocks: "No readable blocks found in this message.",
@@ -153,6 +178,9 @@ const COPY = {
     showFullPreview: "Show full preview",
     close: "Close",
     requestCaptured: "Captured",
+    requestCount: "Requests",
+    sessionStarted: "Started",
+    sessionLatest: "Latest",
     requestModel: "Model",
     requestSession: "Session",
     requestRoute: "Route",
@@ -171,6 +199,26 @@ const COPY = {
     inspectRequest: "Inspect request",
     promptMessages: "Prompt messages",
     sessionShort: "Session",
+    requestFlowTitle: "Request path",
+    requestFlowDesc: "How Claude Code traffic is captured before it reaches the upstream API.",
+    flowClaude: "Claude Code",
+    flowGateway: "prompt-gateway",
+    flowMessages: "POST /v1/messages",
+    flowUpstream: "Upstream API",
+    completeContext: "Full context sent to the model",
+    completeContextDesc:
+      "System instructions and messages exactly as this request sent them upstream, with readable labels before the raw JSON.",
+    requestRawPayload: "Raw request JSON",
+    currentInputEmpty: "No user input was found in this request.",
+    requestPreview: "User input preview",
+    showRequestDetails: "View full request",
+    hideRequestDetails: "Hide details",
+    requestWhatHappened: "Claude Code sent one request through prompt-gateway.",
+    requestDetailsHint:
+      "Open this only when you need system prompts, history, response, or raw JSON.",
+    sessionSummaryHint: "Click to show session ID, timing, model, route, and streaming details.",
+    expandSummary: "Expand",
+    collapseSummary: "Collapse",
     missing: "missing",
     enabled: "Enabled",
     disabled: "Disabled",
@@ -179,8 +227,8 @@ const COPY = {
   },
   zh: {
     appTitle: "Prompt Gateway",
-    appSubtitle: "Claude Code Prompt 本地查看器",
-    detailSubtitle: "请求可读化检查视图",
+    appSubtitle: "Claude Code 请求会话本地查看器",
+    detailSubtitle: "看清 Claude Code 发给模型的内容",
     backToCaptures: "返回记录列表",
     languageEn: "EN",
     languageZh: "中文",
@@ -190,16 +238,17 @@ const COPY = {
     clearSearch: "清除",
     heroEyebrow: "记录面板",
     heroTitle: "Prompt 记录面板",
-    heroText: "快速扫一眼最近请求，优先发现异常，再进入单条详情做可读化排查。",
-    detailEyebrow: "请求详情",
-    detailTitle: "检查单条捕获请求",
-    detailText:
-      "主列聚焦可读 Prompt 内容，侧栏保留请求事实和原始载荷，让你在浏览器里就能快速定位问题。",
-    captures: "记录数",
+    heroText: "快速扫一眼最近 Claude Code 会话，优先发现异常，再进入会话详情做可读化排查。",
+    detailEyebrow: "会话详情",
+    detailTitle: "检查一次 Claude Code 请求会话",
+    detailText: "主列按时间展示这个 session 中所有捕获请求，侧栏保留会话事实和原始载荷。",
+    captures: "请求数",
+    sessions: "会话数",
     successful: "成功数",
     streaming: "流式数",
-    recentCaptures: "最近记录",
-    recentCapturesDesc: "支持按模型、会话、Prompt 文本和请求结果搜索。",
+    recentCaptures: "Claude Code 请求会话",
+    recentCapturesDesc:
+      "每一行是一组 Claude Code session。进入详情后，可以检查每次 /v1/messages 请求和完整 Prompt 载荷。",
     shown: "条已显示",
     search: "搜索",
     searchPlaceholder: "模型、会话、用户输入、成功/失败...",
@@ -208,26 +257,40 @@ const COPY = {
     noCaptures: "还没有捕获到 Prompt。请通过 gateway 启动 Claude Code，列表会自动出现内容。",
     noSearchResults: "没有匹配当前搜索条件的记录。",
     tableStatus: "状态",
+    tableSession: "会话",
+    tableRequests: "请求数",
     tableModel: "模型",
-    tableCaptured: "捕获时间",
+    tableCaptured: "最近捕获",
     tableDuration: "耗时",
-    tablePreview: "用户输入",
+    tablePreview: "最新用户输入预览",
     success: "成功",
     error: "失败",
     unknownModel: "未知模型",
-    noPreview: "暂无用户输入。",
-    requestFacts: "请求关键信息",
-    requestFactsDesc: "调试请求时最常用的一组字段。",
+    noPreview: "暂无最新用户输入。",
+    requestFacts: "会话摘要",
+    requestFactsDesc: "这次 Claude Code 会话的简要概况。",
     systemPrompt: "系统 Prompt",
     systemPromptDesc: "这次捕获请求里携带的系统级指令内容。",
-    userPrompt: "用户 Prompt",
-    userPromptDesc: "这次请求发往上游的 `user` 角色消息。",
+    userPrompt: "这次请求发给模型的用户输入",
+    userPromptDesc:
+      "这次请求中的最后一条 `user` 角色消息。完整 Prompt 载荷还包括系统指令和历史上下文。",
     modelResponse: "模型响应",
     modelResponseDesc: "请求中携带的历史 `assistant` 消息，以及这次调用的响应状态。",
-    promptPreview: "用户输入",
+    promptPreview: "最新用户输入",
     promptPreviewDesc: "展示这次请求里发送到上游的最后一段用户文本。",
     readablePrompt: "可读 Prompt",
     readablePromptDesc: "在不改变原始语义的前提下，转换成更适合人阅读的结构。",
+    promptTimeline: "Prompt 时间线",
+    promptTimelineDesc: "按照这次请求发往上游时的上下文顺序阅读。",
+    requestContext: "请求上下文",
+    requestMessage: "消息",
+    requestShort: "请求",
+    sessionTimeline: "捕获到的请求",
+    sessionTimelineDesc: "每张卡片代表 Claude Code 通过 prompt-gateway 发给模型的一次请求。",
+    collapseAll: "全部折叠",
+    expandAll: "全部展开",
+    collapseEntry: "折叠",
+    expandEntry: "展开",
     system: "系统提示",
     messages: "消息内容",
     noReadableBlocks: "这条消息里没有识别到可读文本块。",
@@ -247,6 +310,9 @@ const COPY = {
     showFullPreview: "展开完整预览",
     close: "关闭",
     requestCaptured: "捕获时间",
+    requestCount: "请求数",
+    sessionStarted: "开始时间",
+    sessionLatest: "最近时间",
     requestModel: "模型",
     requestSession: "会话",
     requestRoute: "路由",
@@ -264,6 +330,25 @@ const COPY = {
     inspectRequest: "查看请求",
     promptMessages: "消息数",
     sessionShort: "会话",
+    requestFlowTitle: "请求路径",
+    requestFlowDesc: "Claude Code 流量在到达上游 API 前如何被本地捕获。",
+    flowClaude: "Claude Code",
+    flowGateway: "prompt-gateway",
+    flowMessages: "POST /v1/messages",
+    flowUpstream: "上游 API",
+    completeContext: "发给模型的完整上下文",
+    completeContextDesc:
+      "这次请求发往上游的 system 和 messages。这里先做可读化标注，原始 JSON 放在后面核对。",
+    requestRawPayload: "原始请求 JSON",
+    currentInputEmpty: "这次请求里没有识别到用户输入。",
+    requestPreview: "用户输入预览",
+    showRequestDetails: "查看完整请求",
+    hideRequestDetails: "收起详情",
+    requestWhatHappened: "Claude Code 通过 prompt-gateway 发出了一次请求。",
+    requestDetailsHint: "需要看 system prompt、历史上下文、响应或原始 JSON 时再展开。",
+    sessionSummaryHint: "点击展开 session ID、时间、模型、路由和流式信息。",
+    expandSummary: "展开",
+    collapseSummary: "收起",
     missing: "缺失",
     enabled: "已开启",
     disabled: "已关闭",
@@ -470,8 +555,15 @@ function extractMessageItems(messages: unknown): MessageItem[] {
   });
 }
 
-function filterMessageItemsByRole(messages: MessageItem[], role: string): MessageItem[] {
-  return messages.filter((message) => message.role === role);
+function getLastUserMessageBlocks(messageItems: MessageItem[]): MessageBlock[] {
+  for (let index = messageItems.length - 1; index >= 0; index -= 1) {
+    const message = messageItems[index];
+    if (message.role === "user" && message.blocks.length > 0) {
+      return message.blocks;
+    }
+  }
+
+  return [];
 }
 
 function extractSseResponseText(responseBody: string): string | null {
@@ -537,15 +629,100 @@ function extractResponseBlocks(responseBody: unknown): MessageBlock[] {
   return singleBlock ? [singleBlock] : [];
 }
 
+function roleTone(role: string): TimelineEntry["tone"] {
+  if (role === "system" || role === "user" || role === "assistant") {
+    return role;
+  }
+
+  if (role === "response") {
+    return "response";
+  }
+
+  return "unknown";
+}
+
+function blockKindLabel(block: MessageBlock): string {
+  const trimmed = block.text.trimStart();
+
+  if (block.type === "text" && trimmed.startsWith("<system-reminder>")) {
+    return "system-reminder";
+  }
+
+  return block.label ?? block.type;
+}
+
+function buildTimelineEntries({
+  systemBlocks,
+  messageItems,
+  responseBlocks,
+  responseFacts,
+  copy,
+}: {
+  systemBlocks: MessageBlock[];
+  messageItems: MessageItem[];
+  responseBlocks: MessageBlock[];
+  responseFacts: Array<{ label: string; value: string }>;
+  copy: (typeof COPY)[Language];
+}): TimelineEntry[] {
+  const entries: TimelineEntry[] = [];
+
+  if (systemBlocks.length > 0) {
+    entries.push({
+      id: "system",
+      role: "system",
+      title: copy.requestContext,
+      description: copy.systemPromptDesc,
+      blocks: systemBlocks,
+      meta: ["requestBody.raw.system", `${systemBlocks.length} ${copy.blocks}`],
+      tone: "system",
+    });
+  }
+
+  messageItems.forEach((message, index) => {
+    entries.push({
+      id: `message-${index}-${message.id}`,
+      role: message.role,
+      title: `${copy.requestMessage} ${index + 1}`,
+      description: message.role,
+      blocks: message.blocks,
+      meta: [`requestBody.raw.messages[${index}]`, `${message.blocks.length} ${copy.blocks}`],
+      tone: roleTone(message.role),
+    });
+  });
+
+  if (responseBlocks.length > 0 || responseFacts.length > 0) {
+    entries.push({
+      id: "current-response",
+      role: "response",
+      title: copy.currentResponse,
+      description: copy.currentResponseDesc,
+      blocks: responseBlocks,
+      meta: ["response.body.raw", ...responseFacts.map((item) => `${item.label}: ${item.value}`)],
+      tone: "response",
+    });
+  }
+
+  return entries;
+}
+
 function parseRoute(pathname: string): Route {
-  if (pathname.startsWith("/captures/")) {
+  if (pathname.startsWith("/sessions/")) {
+    const encodedSessionId = pathname.slice("/sessions/".length);
     return {
       name: "detail",
-      requestId: decodeURIComponent(pathname.slice("/captures/".length)),
+      sessionId: decodeSessionRouteId(encodedSessionId),
     };
   }
 
   return { name: "home" };
+}
+
+function encodeSessionRouteId(value: string | null): string {
+  return value ? encodeURIComponent(value) : "~missing";
+}
+
+function decodeSessionRouteId(value: string): string | null {
+  return value === "~missing" ? null : decodeURIComponent(value);
 }
 
 function navigate(pathname: string): void {
@@ -646,36 +823,25 @@ function DetailSummaryCard({
   );
 }
 
-function MessageItemList({ items, copy }: { items: MessageItem[]; copy: (typeof COPY)[Language] }) {
+function RequestFlow({ copy }: { copy: (typeof COPY)[Language] }) {
+  const steps = [copy.flowClaude, copy.flowGateway, copy.flowMessages, copy.flowUpstream];
+
   return (
-    <div className="conversation-list">
-      {items.map((message) => (
-        <article className="conversation-card" key={message.id}>
-          <header className="conversation-header">
-            <span className="role-badge">{message.role}</span>
-            <span className="hint">
-              {message.blocks.length} {copy.blocks}
-            </span>
-          </header>
-          {message.blocks.length > 0 ? (
-            message.blocks.map((block) => (
-              <TextBlock
-                block={block}
-                closeText={copy.close}
-                key={block.id}
-                showFullBlockText={copy.showFullBlock}
-              />
-            ))
-          ) : (
-            <div className="empty-state">{copy.noReadableBlocks}</div>
-          )}
-        </article>
-      ))}
-    </div>
+    <section className="panel request-flow-panel">
+      <SectionHeader title={copy.requestFlowTitle} description={copy.requestFlowDesc} />
+      <ol className="request-flow" aria-label={copy.requestFlowTitle}>
+        {steps.map((step, index) => (
+          <li key={step}>
+            <span className="flow-step-number">{index + 1}</span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
-function JsonPanel({
+function RawDetails({
   title,
   value,
   showFullJsonText,
@@ -690,17 +856,283 @@ function JsonPanel({
   const shouldCollapse = text.length > COLLAPSE_THRESHOLD;
 
   return (
-    <section className="panel raw-panel">
-      <details className="raw-details" open={!shouldCollapse}>
-        <summary>
-          <span>{title}</span>
-          <span className="raw-summary-hint">
-            {shouldCollapse ? showFullJsonText : openByDefaultText}
-          </span>
-        </summary>
-        {shouldCollapse ? <pre>{text}</pre> : <pre>{text}</pre>}
-      </details>
-    </section>
+    <details className="inline-raw-details" open={!shouldCollapse}>
+      <summary>
+        <span>{title}</span>
+        <span>{shouldCollapse ? showFullJsonText : openByDefaultText}</span>
+      </summary>
+      <pre>{text}</pre>
+    </details>
+  );
+}
+
+function RequestInspectionCard({
+  capture,
+  requestIndex,
+  language,
+  copy,
+}: {
+  capture: CaptureRecord;
+  requestIndex: number;
+  language: Language;
+  copy: (typeof COPY)[Language];
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const systemBlocks = extractSystemBlocks(capture.derived.system);
+  const messageItems = extractMessageItems(capture.derived.messages);
+  const currentUserBlocks = getLastUserMessageBlocks(messageItems);
+  const currentUserPreview =
+    currentUserBlocks
+      .map((block) => block.text)
+      .join("\n\n")
+      .trim() || capture.derived.promptTextPreview;
+  const responseFacts = [
+    {
+      label: copy.requestResponse,
+      value: statusText(capture.response.ok, capture.response.status, copy),
+    },
+    { label: copy.requestDuration, value: `${capture.response.durationMs} ms` },
+    {
+      label: copy.requestStreaming,
+      value: capture.derived.stream ? copy.enabled : copy.disabled,
+    },
+  ];
+  const timelineEntries = buildTimelineEntries({
+    systemBlocks,
+    messageItems,
+    responseBlocks: extractResponseBlocks(capture.response.body?.raw ?? null),
+    responseFacts,
+    copy,
+  });
+  const facts = [
+    { label: copy.requestCaptured, value: formatDate(capture.capturedAt, language) },
+    {
+      label: copy.requestModel,
+      value: capture.derived.model ?? copy.unknownModel,
+    },
+    { label: copy.requestRoute, value: `${capture.method} ${capture.path}` },
+    {
+      label: copy.requestResponse,
+      value: statusText(capture.response.ok, capture.response.status, copy),
+    },
+    { label: copy.requestDuration, value: `${capture.response.durationMs} ms` },
+    { label: copy.requestStreaming, value: capture.derived.stream ? copy.enabled : copy.disabled },
+    {
+      label: copy.requestMaxTokens,
+      value: capture.derived.maxTokens === null ? copy.missing : String(capture.derived.maxTokens),
+    },
+  ];
+
+  return (
+    <article
+      className={isExpanded ? "request-inspection-card expanded" : "request-inspection-card"}
+      data-request-index={requestIndex + 1}
+    >
+      <header className="request-card-header">
+        <div>
+          <div className="timeline-title-row">
+            <span className={capture.response.ok ? "status ok" : "status error"}>
+              {capture.response.ok ? copy.success : copy.error}
+            </span>
+            <h3>
+              {copy.requestShort} {requestIndex + 1}
+            </h3>
+          </div>
+          <p>{copy.requestWhatHappened}</p>
+        </div>
+        <div className="request-card-actions">
+          <div className="request-chip-row">
+            <span>{capture.derived.model ?? copy.unknownModel}</span>
+            <span>{capture.response.durationMs} ms</span>
+            <span>{formatDate(capture.capturedAt, language)}</span>
+          </div>
+          <button
+            aria-label={isExpanded ? copy.hideRequestDetails : copy.showRequestDetails}
+            aria-expanded={isExpanded}
+            className="request-toggle"
+            onClick={() => setIsExpanded((current) => !current)}
+            title={isExpanded ? copy.hideRequestDetails : copy.showRequestDetails}
+            type="button"
+          >
+            <span aria-hidden="true">{isExpanded ? "-" : "+"}</span>
+          </button>
+        </div>
+      </header>
+
+      <section className="request-preview-panel">
+        <div className="request-preview-heading">
+          <span>{copy.requestPreview}</span>
+          <span>{copy.requestDetailsHint}</span>
+        </div>
+        <pre>{formatPreview(currentUserPreview, copy.currentInputEmpty)}</pre>
+      </section>
+
+      {isExpanded ? (
+        <div className="request-detail-stack">
+          <section className="current-input-panel">
+            <SectionHeader title={copy.userPrompt} description={copy.userPromptDesc} />
+            <div className="current-input-body">
+              {currentUserBlocks.length > 0 ? (
+                currentUserBlocks.map((block) => (
+                  <TextBlock
+                    block={block}
+                    closeText={copy.close}
+                    key={block.id}
+                    showFullBlockText={copy.showFullBlock}
+                  />
+                ))
+              ) : (
+                <div className="empty-state">{copy.currentInputEmpty}</div>
+              )}
+            </div>
+          </section>
+
+          <details className="request-details-section">
+            <summary>{copy.completeContext}</summary>
+            <div className="request-details-body">
+              <SectionHeader description={copy.completeContextDesc} title={copy.completeContext} />
+              <TimelineList copy={copy} entries={timelineEntries} key={capture.requestId} />
+            </div>
+          </details>
+
+          <details className="request-details-section">
+            <summary>{copy.rawPayloads}</summary>
+            <div className="request-card-footer">
+              <KeyValueList items={facts} />
+              <RawDetails
+                openByDefaultText={copy.openByDefault}
+                showFullJsonText={copy.showFullJson}
+                title={copy.requestRawPayload}
+                value={capture.requestBody.raw}
+              />
+            </div>
+          </details>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function TimelineList({
+  entries,
+  copy,
+}: {
+  entries: TimelineEntry[];
+  copy: (typeof COPY)[Language];
+}) {
+  const defaultCollapsedIds = useMemo(
+    () =>
+      new Set(
+        entries
+          .filter(
+            (entry) =>
+              entry.blocks.length > 1 || entry.blocks.some((block) => block.text.length > 1000),
+          )
+          .map((entry) => entry.id),
+      ),
+    [entries],
+  );
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+
+  if (entries.length === 0) {
+    return <div className="empty-state">{copy.noReadablePrompt}</div>;
+  }
+
+  const allExpanded = entries.every(
+    (entry) => !defaultCollapsedIds.has(entry.id) || expandedIds.has(entry.id),
+  );
+
+  return (
+    <div className="timeline-wrap">
+      <div className="timeline-toolbar">
+        <button
+          className="ghost-button"
+          onClick={() => {
+            setExpandedIds(allExpanded ? new Set() : new Set(entries.map((entry) => entry.id)));
+          }}
+          type="button"
+        >
+          {allExpanded ? copy.collapseAll : copy.expandAll}
+        </button>
+      </div>
+      <div className="timeline-list">
+        {entries.map((entry, index) => {
+          const isCollapsible = defaultCollapsedIds.has(entry.id);
+          const isExpanded = !isCollapsible || expandedIds.has(entry.id);
+          const previewBlock = entry.blocks[0] ?? null;
+
+          return (
+            <article className={`timeline-entry ${entry.tone}`} key={entry.id}>
+              <div className="timeline-rail" aria-hidden="true">
+                <span>{String(index + 1).padStart(2, "0")}</span>
+              </div>
+              <div className="timeline-card">
+                <header className="timeline-header">
+                  <div>
+                    <div className="timeline-title-row">
+                      <span className="role-badge">{entry.role}</span>
+                      <h3>{entry.title}</h3>
+                    </div>
+                    <p>{entry.description}</p>
+                  </div>
+                  <div className="timeline-side">
+                    {entry.meta.length > 0 ? (
+                      <div className="timeline-meta">
+                        {entry.meta.map((item) => (
+                          <span className="hint" key={item}>
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {isCollapsible ? (
+                      <button
+                        className="inline-link-button"
+                        onClick={() => {
+                          setExpandedIds((current) => {
+                            const next = new Set(current);
+                            if (next.has(entry.id)) {
+                              next.delete(entry.id);
+                            } else {
+                              next.add(entry.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        type="button"
+                      >
+                        {isExpanded ? copy.collapseEntry : copy.expandEntry}
+                      </button>
+                    ) : null}
+                  </div>
+                </header>
+                <div
+                  className={isExpanded ? "timeline-block-list" : "timeline-block-list collapsed"}
+                >
+                  {entry.blocks.length > 0 && isExpanded ? (
+                    entry.blocks.map((block) => (
+                      <TextBlock
+                        block={block}
+                        closeText={copy.close}
+                        key={block.id}
+                        showFullBlockText={copy.showFullBlock}
+                      />
+                    ))
+                  ) : previewBlock ? (
+                    <div className="timeline-entry-preview">
+                      <span className="pill">{blockKindLabel(previewBlock)}</span>
+                      <pre>{previewBlock.text}</pre>
+                    </div>
+                  ) : (
+                    <div className="empty-state">{copy.noReadableBlocks}</div>
+                  )}
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -715,6 +1147,7 @@ function TextBlock({
 }) {
   const shouldCollapse = block.text.length > COLLAPSE_THRESHOLD;
   const [isOpen, setIsOpen] = useState(false);
+  const label = blockKindLabel(block);
 
   useEffect(() => {
     if (!isOpen) {
@@ -748,7 +1181,7 @@ function TextBlock({
       <div className="modal-panel">
         <div className="modal-header">
           <div className="text-block-meta">
-            <span className="pill">{block.label ?? block.type}</span>
+            <span className="pill">{label}</span>
             {block.label && block.type !== "text" ? (
               <span className="hint">{block.type}</span>
             ) : null}
@@ -768,7 +1201,7 @@ function TextBlock({
     <>
       <article className="text-block">
         <div className="text-block-meta">
-          <span className="pill">{block.label ?? block.type}</span>
+          <span className="pill">{label}</span>
           {block.label && block.type !== "text" ? <span className="hint">{block.type}</span> : null}
         </div>
         {shouldCollapse ? (
@@ -788,129 +1221,12 @@ function TextBlock({
   );
 }
 
-function HumanReadablePrompt({
-  system,
-  messages,
-  copy,
-}: {
-  system: unknown;
-  messages: unknown;
-  copy: (typeof COPY)[Language];
-}) {
-  const systemBlocks = extractSystemBlocks(system);
-  const messageItems = extractMessageItems(messages);
-  const [activeTab, setActiveTab] = useState<"system" | "messages">(
-    messageItems.length > 0 ? "messages" : "system",
-  );
-
-  return (
-    <section className="panel readable-panel">
-      <SectionHeader title={copy.readablePrompt} description={copy.readablePromptDesc} />
-
-      {systemBlocks.length > 0 || messageItems.length > 0 ? (
-        <div className="tab-strip" role="tablist" aria-label={copy.readablePrompt}>
-          {systemBlocks.length > 0 ? (
-            <button
-              aria-selected={activeTab === "system"}
-              className={activeTab === "system" ? "tab-button active" : "tab-button"}
-              onClick={() => setActiveTab("system")}
-              role="tab"
-              type="button"
-            >
-              {copy.system}
-            </button>
-          ) : null}
-          {messageItems.length > 0 ? (
-            <button
-              aria-selected={activeTab === "messages"}
-              className={activeTab === "messages" ? "tab-button active" : "tab-button"}
-              onClick={() => setActiveTab("messages")}
-              role="tab"
-              type="button"
-            >
-              {copy.messages}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
-      {systemBlocks.length > 0 && activeTab === "system" ? (
-        <div className="message-section">
-          <div className="conversation-card system">
-            {systemBlocks.map((block) => (
-              <TextBlock
-                block={block}
-                closeText={copy.close}
-                key={block.id}
-                showFullBlockText={copy.showFullBlock}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {messageItems.length > 0 && activeTab === "messages" ? (
-        <div className="message-section">
-          <div className="conversation-list">
-            {messageItems.map((message) => (
-              <article className="conversation-card" key={message.id}>
-                <header className="conversation-header">
-                  <span className="role-badge">{message.role}</span>
-                  <span className="hint">
-                    {message.blocks.length} {copy.blocks}
-                  </span>
-                </header>
-                {message.blocks.length > 0 ? (
-                  message.blocks.map((block) => (
-                    <TextBlock
-                      block={block}
-                      closeText={copy.close}
-                      key={block.id}
-                      showFullBlockText={copy.showFullBlock}
-                    />
-                  ))
-                ) : (
-                  <div className="empty-state">{copy.noReadableBlocks}</div>
-                )}
-              </article>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {systemBlocks.length === 0 && messageItems.length === 0 ? (
-        <div className="empty-state">{copy.noReadablePrompt}</div>
-      ) : null}
-    </section>
-  );
-}
-
-function PromptPreview({
-  value,
-  showFullPreviewText,
-}: {
-  value: string;
-  showFullPreviewText: string;
-}) {
-  const normalized = normalizeText(value || "(empty)");
-  const shouldCollapse = normalized.length > COLLAPSE_THRESHOLD;
-
-  return shouldCollapse ? (
-    <details className="collapsible-panel">
-      <summary>{showFullPreviewText}</summary>
-      <pre className="preview-pre collapsed">{normalized}</pre>
-    </details>
-  ) : (
-    <pre>{normalized}</pre>
-  );
-}
-
-function CaptureTable({
-  captures,
+function SessionTable({
+  sessions,
   language,
   copy,
 }: {
-  captures: CaptureListItem[];
+  sessions: SessionListItem[];
   language: Language;
   copy: (typeof COPY)[Language];
 }) {
@@ -918,27 +1234,37 @@ function CaptureTable({
     <div className="capture-table">
       <div className="capture-table-head" aria-hidden="true">
         <span>{copy.tableStatus}</span>
+        <span>{copy.tableSession}</span>
+        <span>{copy.tableRequests}</span>
         <span>{copy.tableModel}</span>
         <span>{copy.tableCaptured}</span>
-        <span>{copy.tableDuration}</span>
         <span>{copy.tablePreview}</span>
       </div>
 
-      {captures.map((capture) => (
+      {sessions.map((session) => (
         <button
-          className={capture.ok ? "capture-row capture-row-ok" : "capture-row capture-row-error"}
-          key={capture.requestId}
-          onClick={() => navigate(`/captures/${capture.requestId}`)}
+          className={
+            session.errorCount === 0
+              ? "capture-row capture-row-ok"
+              : "capture-row capture-row-error"
+          }
+          key={session.sessionId ?? "missing-session"}
+          onClick={() => navigate(`/sessions/${encodeSessionRouteId(session.sessionId)}`)}
           type="button"
         >
-          <span className={capture.ok ? "status ok" : "status error"}>
-            {capture.ok ? copy.success : copy.error}
+          <span className={session.errorCount === 0 ? "status ok" : "status error"}>
+            {session.errorCount === 0 ? copy.success : copy.error}
           </span>
-          <span className="capture-model">{capture.model ?? copy.unknownModel}</span>
-          <span>{formatDate(capture.capturedAt, language)}</span>
-          <span>{capture.durationMs} ms</span>
+          <span className="capture-model">{compactSessionId(session.sessionId, copy.missing)}</span>
+          <span>
+            {session.requestCount} · {session.durationMs} ms
+          </span>
+          <span className="capture-model">
+            {session.models.length > 0 ? session.models.join(", ") : copy.unknownModel}
+          </span>
+          <span>{formatDate(session.latestCapturedAt, language)}</span>
           <span className="capture-preview">
-            {formatPreview(capture.promptTextPreview, copy.noPreview)}
+            {formatPreview(session.promptTextPreview, copy.noPreview)}
           </span>
         </button>
       ))}
@@ -956,13 +1282,12 @@ export function App() {
     return stored === "light" || stored === "dark" ? stored : detectSystemTheme();
   });
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.pathname));
-  const [captures, setCaptures] = useState<CaptureListItem[]>([]);
-  const [capturesLoading, setCapturesLoading] = useState(true);
-  const [capturesError, setCapturesError] = useState<string | null>(null);
-  const [selectedCapture, setSelectedCapture] = useState<CaptureRecord | null>(null);
+  const [sessions, setSessions] = useState<SessionListItem[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [selectedCaptures, setSelectedCaptures] = useState<CaptureRecord[]>([]);
   const [selectedLoading, setSelectedLoading] = useState(false);
   const [selectedError, setSelectedError] = useState<string | null>(null);
-  const [activeDetailTab, setActiveDetailTab] = useState<DetailTab>("system");
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -1000,32 +1325,32 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadCaptures() {
-      setCapturesLoading(true);
-      setCapturesError(null);
+    async function loadSessions() {
+      setSessionsLoading(true);
+      setSessionsError(null);
 
       try {
-        const response = await fetch("/api/captures");
+        const response = await fetch("/api/sessions");
         if (!response.ok) {
-          throw new Error(`Failed to load captures (${response.status})`);
+          throw new Error(`Failed to load sessions (${response.status})`);
         }
 
-        const payload = (await response.json()) as { captures: CaptureListItem[] };
+        const payload = (await response.json()) as { sessions: SessionListItem[] };
         if (!cancelled) {
-          setCaptures(payload.captures);
+          setSessions(payload.sessions);
         }
       } catch (error) {
         if (!cancelled) {
-          setCapturesError(error instanceof Error ? error.message : String(error));
+          setSessionsError(error instanceof Error ? error.message : String(error));
         }
       } finally {
         if (!cancelled) {
-          setCapturesLoading(false);
+          setSessionsLoading(false);
         }
       }
     }
 
-    void loadCaptures();
+    void loadSessions();
     return () => {
       cancelled = true;
     };
@@ -1033,28 +1358,30 @@ export function App() {
 
   useEffect(() => {
     if (route.name !== "detail") {
-      setSelectedCapture(null);
+      setSelectedCaptures([]);
       setSelectedError(null);
       setSelectedLoading(false);
-      setActiveDetailTab("system");
       return;
     }
 
     let cancelled = false;
 
-    async function loadCapture(requestId: string) {
+    async function loadSession(sessionId: string | null) {
       setSelectedLoading(true);
       setSelectedError(null);
 
       try {
-        const response = await fetch(`/api/captures/${encodeURIComponent(requestId)}`);
+        const response = await fetch(`/api/sessions/${encodeSessionRouteId(sessionId)}`);
         if (!response.ok) {
-          throw new Error(`Failed to load capture (${response.status})`);
+          throw new Error(`Failed to load session (${response.status})`);
         }
 
-        const payload = (await response.json()) as CaptureRecord;
+        const payload = (await response.json()) as {
+          sessionId: string | null;
+          captures: CaptureRecord[];
+        };
         if (!cancelled) {
-          setSelectedCapture(payload);
+          setSelectedCaptures(payload.captures);
         }
       } catch (error) {
         if (!cancelled) {
@@ -1067,42 +1394,42 @@ export function App() {
       }
     }
 
-    void loadCapture(route.requestId);
+    void loadSession(route.sessionId);
     return () => {
       cancelled = true;
     };
   }, [route]);
 
   const stats = useMemo(() => {
-    const successCount = captures.filter((item) => item.ok).length;
-    const streamCount = captures.filter((item) => item.stream).length;
+    const successCount = sessions.reduce((total, item) => total + item.successCount, 0);
+    const streamCount = sessions.reduce((total, item) => total + item.streamCount, 0);
 
     return {
-      total: captures.length,
+      total: sessions.length,
       successCount,
       streamCount,
     };
-  }, [captures]);
+  }, [sessions]);
 
-  const filteredCaptures = useMemo(() => {
+  const filteredSessions = useMemo(() => {
     const trimmedQuery = deferredQuery.trim().toLowerCase();
     if (!trimmedQuery) {
-      return captures;
+      return sessions;
     }
 
-    return captures.filter((capture) => {
+    return sessions.filter((session) => {
       const haystack = [
-        capture.model ?? "",
-        capture.sessionId ?? "",
-        capture.promptTextPreview,
-        capture.ok ? copy.success : copy.error,
+        session.models.join(" "),
+        session.sessionId ?? "",
+        session.promptTextPreview,
+        session.errorCount === 0 ? copy.success : copy.error,
       ]
         .join(" ")
         .toLowerCase();
 
       return haystack.includes(trimmedQuery);
     });
-  }, [captures, copy.error, copy.success, deferredQuery]);
+  }, [copy.error, copy.success, deferredQuery, sessions]);
 
   const nextLanguage = language === "en" ? "zh" : "en";
   const nextTheme = theme === "light" ? "dark" : "light";
@@ -1145,76 +1472,77 @@ export function App() {
   ) : null;
 
   if (route.name === "detail") {
-    const facts = selectedCapture
+    const firstCapture = selectedCaptures[0] ?? null;
+    const latestCapture = selectedCaptures[selectedCaptures.length - 1] ?? null;
+    const selectedSessionId = route.sessionId;
+    const sessionOk = selectedCaptures.every((capture) => capture.response.ok);
+    const sessionDurationMs = selectedCaptures.reduce(
+      (total, capture) => total + capture.response.durationMs,
+      0,
+    );
+    const sessionModels = Array.from(
+      new Set(
+        selectedCaptures
+          .map((capture) => capture.derived.model)
+          .filter((model): model is string => Boolean(model)),
+      ),
+    );
+    const sessionStreamCount = selectedCaptures.filter((capture) => capture.derived.stream).length;
+
+    const facts = latestCapture
       ? [
-          { label: copy.requestCaptured, value: formatDate(selectedCapture.capturedAt, language) },
-          { label: copy.requestModel, value: selectedCapture.derived.model ?? copy.unknownModel },
-          { label: copy.requestSession, value: selectedCapture.sessionId ?? copy.missing },
-          { label: copy.requestRoute, value: `${selectedCapture.method} ${selectedCapture.path}` },
+          { label: copy.requestSession, value: selectedSessionId ?? copy.missing },
+          { label: copy.requestCount, value: String(selectedCaptures.length) },
+          {
+            label: copy.sessionStarted,
+            value: firstCapture ? formatDate(firstCapture.capturedAt, language) : copy.missing,
+          },
+          { label: copy.sessionLatest, value: formatDate(latestCapture.capturedAt, language) },
+          {
+            label: copy.requestModel,
+            value: sessionModels.length > 0 ? sessionModels.join(", ") : copy.unknownModel,
+          },
+          { label: copy.requestRoute, value: `${latestCapture.method} ${latestCapture.path}` },
           {
             label: copy.requestResponse,
-            value: statusText(selectedCapture.response.ok, selectedCapture.response.status, copy),
+            value: sessionOk
+              ? `${copy.success} · ${selectedCaptures.length}/${selectedCaptures.length}`
+              : `${copy.error} · ${
+                  selectedCaptures.filter((capture) => !capture.response.ok).length
+                }/${selectedCaptures.length}`,
           },
-          { label: copy.requestDuration, value: `${selectedCapture.response.durationMs} ms` },
+          { label: copy.requestDuration, value: `${sessionDurationMs} ms` },
           {
             label: copy.requestStreaming,
-            value: selectedCapture.derived.stream ? copy.enabled : copy.disabled,
-          },
-          {
-            label: copy.requestMaxTokens,
             value:
-              selectedCapture.derived.maxTokens === null
-                ? copy.missing
-                : String(selectedCapture.derived.maxTokens),
+              sessionStreamCount > 0 ? `${copy.enabled} · ${sessionStreamCount}` : copy.disabled,
           },
         ]
       : [];
 
-    const detailSummaryCards = selectedCapture
+    const detailSummaryCards = latestCapture
       ? [
           {
             label: copy.requestResponse,
-            value: statusText(selectedCapture.response.ok, selectedCapture.response.status, copy),
-            tone: selectedCapture.response.ok ? "success" : "danger",
+            value: sessionOk ? copy.success : copy.error,
+            tone: sessionOk ? "success" : "danger",
           },
           {
             label: copy.requestDuration,
-            value: `${selectedCapture.response.durationMs} ms`,
+            value: `${sessionDurationMs} ms`,
             tone: "default" as const,
           },
           {
             label: copy.requestModel,
-            value: selectedCapture.derived.model ?? copy.unknownModel,
-            hoverValue: selectedCapture.derived.model ?? copy.unknownModel,
+            value: sessionModels.length > 0 ? sessionModels.join(", ") : copy.unknownModel,
+            hoverValue: sessionModels.length > 0 ? sessionModels.join(", ") : copy.unknownModel,
             tone: "default" as const,
           },
           {
             label: copy.sessionShort,
-            value: compactSessionId(selectedCapture.sessionId, copy.missing),
-            hoverValue: selectedCapture.sessionId ?? copy.missing,
+            value: compactSessionId(selectedSessionId, copy.missing),
+            hoverValue: selectedSessionId ?? copy.missing,
             tone: "default" as const,
-          },
-        ]
-      : [];
-
-    const systemBlocks = selectedCapture ? extractSystemBlocks(selectedCapture.derived.system) : [];
-    const messageItems = selectedCapture
-      ? extractMessageItems(selectedCapture.derived.messages)
-      : [];
-    const userMessages = filterMessageItemsByRole(messageItems, "user");
-    const assistantMessages = filterMessageItemsByRole(messageItems, "assistant");
-    const responseBodyRaw = selectedCapture?.response.body?.raw ?? null;
-    const responseBlocks = selectedCapture ? extractResponseBlocks(responseBodyRaw) : [];
-    const responseFacts = selectedCapture
-      ? [
-          {
-            label: copy.requestResponse,
-            value: statusText(selectedCapture.response.ok, selectedCapture.response.status, copy),
-          },
-          { label: copy.requestDuration, value: `${selectedCapture.response.durationMs} ms` },
-          {
-            label: copy.requestStreaming,
-            value: selectedCapture.derived.stream ? copy.enabled : copy.disabled,
           },
         ]
       : [];
@@ -1247,9 +1575,11 @@ export function App() {
           </div>
         ) : null}
 
-        {selectedCapture ? (
+        {latestCapture ? (
           <main className="detail-shell">
             <section className="detail-main">
+              <RequestFlow copy={copy} />
+
               <section className="detail-summary-grid">
                 {detailSummaryCards.map((card) => (
                   <DetailSummaryCard
@@ -1262,164 +1592,45 @@ export function App() {
                 ))}
               </section>
 
-              <div
-                className="tab-strip detail-tab-strip"
-                role="tablist"
-                aria-label={copy.detailSubtitle}
-              >
-                <button
-                  aria-selected={activeDetailTab === "system"}
-                  className={activeDetailTab === "system" ? "tab-button active" : "tab-button"}
-                  onClick={() => setActiveDetailTab("system")}
-                  role="tab"
-                  type="button"
-                >
-                  {copy.systemPrompt}
-                </button>
-                <button
-                  aria-selected={activeDetailTab === "user"}
-                  className={activeDetailTab === "user" ? "tab-button active" : "tab-button"}
-                  onClick={() => setActiveDetailTab("user")}
-                  role="tab"
-                  type="button"
-                >
-                  {copy.userPrompt}
-                </button>
-                <button
-                  aria-selected={activeDetailTab === "response"}
-                  className={activeDetailTab === "response" ? "tab-button active" : "tab-button"}
-                  onClick={() => setActiveDetailTab("response")}
-                  role="tab"
-                  type="button"
-                >
-                  {copy.modelResponse}
-                </button>
-              </div>
+              <details className="session-technical-details">
+                <summary>
+                  <span>
+                    <strong>{copy.requestFacts}</strong>
+                    <small>{copy.sessionSummaryHint}</small>
+                  </span>
+                  <span className="summary-state">
+                    <span className="summary-state-open">{copy.collapseSummary}</span>
+                    <span className="summary-state-closed">{copy.expandSummary}</span>
+                  </span>
+                </summary>
+                <div className="session-technical-body">
+                  <KeyValueList items={facts} />
+                </div>
+              </details>
 
-              {activeDetailTab === "system" ? (
-                <section className="panel highlight-panel" id="detail-system">
-                  <SectionHeader title={copy.systemPrompt} description={copy.systemPromptDesc} />
-                  <div className="category-stack">
-                    {systemBlocks.length > 0 ? (
-                      <div className="conversation-card system">
-                        {systemBlocks.map((block) => (
-                          <TextBlock
-                            block={block}
-                            closeText={copy.close}
-                            key={block.id}
-                            showFullBlockText={copy.showFullBlock}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="empty-state">{copy.noSystemPrompt}</div>
-                    )}
-                    <JsonPanel
-                      openByDefaultText={copy.openByDefault}
-                      showFullJsonText={copy.showFullJson}
-                      title={copy.systemJson}
-                      value={selectedCapture.derived.system}
+              <section className="panel highlight-panel timeline-panel" id="detail-timeline">
+                <SectionHeader
+                  title={copy.sessionTimeline}
+                  description={copy.sessionTimelineDesc}
+                  action={
+                    <span className={sessionOk ? "status ok" : "status error"}>
+                      {sessionOk ? copy.success : copy.error}
+                    </span>
+                  }
+                />
+                <div className="request-card-list">
+                  {selectedCaptures.map((capture, index) => (
+                    <RequestInspectionCard
+                      capture={capture}
+                      copy={copy}
+                      key={capture.requestId}
+                      language={language}
+                      requestIndex={index}
                     />
-                  </div>
-                </section>
-              ) : null}
-
-              {activeDetailTab === "user" ? (
-                <section className="panel" id="detail-user">
-                  <SectionHeader title={copy.userPrompt} description={copy.userPromptDesc} />
-                  <div className="category-stack">
-                    {userMessages.length > 0 ? (
-                      <MessageItemList copy={copy} items={userMessages} />
-                    ) : (
-                      <div className="empty-state">{copy.noUserPrompt}</div>
-                    )}
-                    <JsonPanel
-                      openByDefaultText={copy.openByDefault}
-                      showFullJsonText={copy.showFullJson}
-                      title={copy.messagesJson}
-                      value={selectedCapture.derived.messages}
-                    />
-                  </div>
-                </section>
-              ) : null}
-
-              {activeDetailTab === "response" ? (
-                <section className="panel" id="detail-response">
-                  <SectionHeader
-                    title={copy.modelResponse}
-                    description={copy.modelResponseDesc}
-                    action={
-                      <span className={selectedCapture.response.ok ? "status ok" : "status error"}>
-                        {statusText(
-                          selectedCapture.response.ok,
-                          selectedCapture.response.status,
-                          copy,
-                        )}
-                      </span>
-                    }
-                  />
-                  <div className="category-stack">
-                    {responseBlocks.length > 0 ? (
-                      <div className="conversation-card">
-                        <header className="conversation-header">
-                          <span className="role-badge">response</span>
-                          <span className="hint">
-                            {responseBlocks.length} {copy.blocks}
-                          </span>
-                        </header>
-                        {responseBlocks.map((block) => (
-                          <TextBlock
-                            block={block}
-                            closeText={copy.close}
-                            key={block.id}
-                            showFullBlockText={copy.showFullBlock}
-                          />
-                        ))}
-                      </div>
-                    ) : assistantMessages.length > 0 ? (
-                      <MessageItemList copy={copy} items={assistantMessages} />
-                    ) : (
-                      <div className="empty-state">{copy.noModelResponse}</div>
-                    )}
-                    <section className="response-note">
-                      <SectionHeader
-                        title={copy.currentResponse}
-                        description={copy.currentResponseDesc}
-                      />
-                      <KeyValueList items={responseFacts} />
-                    </section>
-                    <JsonPanel
-                      openByDefaultText={copy.openByDefault}
-                      showFullJsonText={copy.showFullJson}
-                      title={copy.responseBody}
-                      value={responseBodyRaw}
-                    />
-                  </div>
-                </section>
-              ) : null}
-            </section>
-
-            <aside className="detail-sidebar">
-              <section className="panel sidebar-sticky">
-                <SectionHeader title={copy.requestFacts} description={copy.requestFactsDesc} />
-                <KeyValueList items={facts} />
+                  ))}
+                </div>
               </section>
-
-              <div className="raw-panel-list">
-                <JsonPanel
-                  openByDefaultText={copy.openByDefault}
-                  showFullJsonText={copy.showFullJson}
-                  title={copy.headers}
-                  value={selectedCapture.requestHeaders.redacted}
-                />
-                <JsonPanel
-                  openByDefaultText={copy.openByDefault}
-                  showFullJsonText={copy.showFullJson}
-                  title={copy.rawRequest}
-                  value={selectedCapture.requestBody.raw}
-                />
-              </div>
-            </aside>
+            </section>
           </main>
         ) : null}
         {backToTopButton}
@@ -1432,7 +1643,7 @@ export function App() {
       <TopBar action={controls} subtitle={copy.appSubtitle} title={copy.appTitle} />
 
       <section className="summary-grid">
-        <SummaryCard label={copy.captures} value={String(stats.total)} />
+        <SummaryCard label={copy.sessions} value={String(stats.total)} />
         <SummaryCard label={copy.successful} value={String(stats.successCount)} />
         <SummaryCard label={copy.streaming} value={String(stats.streamCount)} />
       </section>
@@ -1442,7 +1653,7 @@ export function App() {
           <SectionHeader
             action={
               <span className="hint">
-                {filteredCaptures.length} {copy.shown}
+                {filteredSessions.length} {copy.shown}
               </span>
             }
             description={copy.recentCapturesDesc}
@@ -1466,21 +1677,21 @@ export function App() {
             ) : null}
           </div>
 
-          {capturesLoading ? <div className="empty-state">{copy.loadingHistory}</div> : null}
-          {capturesError ? (
+          {sessionsLoading ? <div className="empty-state">{copy.loadingHistory}</div> : null}
+          {sessionsError ? (
             <div className="empty-state error" role="alert">
-              {capturesError}
+              {sessionsError}
             </div>
           ) : null}
 
-          {!capturesLoading && !capturesError && filteredCaptures.length === 0 ? (
+          {!sessionsLoading && !sessionsError && filteredSessions.length === 0 ? (
             <div className="empty-state">
-              {captures.length === 0 ? copy.noCaptures : copy.noSearchResults}
+              {sessions.length === 0 ? copy.noCaptures : copy.noSearchResults}
             </div>
           ) : null}
 
-          {!capturesLoading && !capturesError && filteredCaptures.length > 0 ? (
-            <CaptureTable captures={filteredCaptures} copy={copy} language={language} />
+          {!sessionsLoading && !sessionsError && filteredSessions.length > 0 ? (
+            <SessionTable sessions={filteredSessions} copy={copy} language={language} />
           ) : null}
         </section>
       </main>

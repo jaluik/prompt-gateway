@@ -222,7 +222,10 @@ test("gateway exposes capture history APIs and browser shell", async () => {
   try {
     await fetch(`${gatewayInfo.url}/v1/messages`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "x-claude-code-session-id": "browser-session",
+      },
       body: JSON.stringify({
         model: "claude-sonnet",
         messages: [{ role: "user", content: "browser test prompt" }],
@@ -244,6 +247,22 @@ test("gateway exposes capture history APIs and browser shell", async () => {
     assert.equal(listPayload.captures.length, 1);
     assert.match(listPayload.captures[0]?.promptTextPreview || "", /browser test prompt/);
 
+    const sessionListResponse = await fetch(`${gatewayInfo.url}/api/sessions`);
+    assert.equal(sessionListResponse.status, 200);
+    const sessionListPayload = (await sessionListResponse.json()) as {
+      sessions: Array<{ sessionId: string | null; requestCount: number }>;
+    };
+    assert.equal(sessionListPayload.sessions[0]?.sessionId, "browser-session");
+    assert.equal(sessionListPayload.sessions[0]?.requestCount, 1);
+
+    const sessionDetailResponse = await fetch(`${gatewayInfo.url}/api/sessions/browser-session`);
+    assert.equal(sessionDetailResponse.status, 200);
+    const sessionDetailPayload = (await sessionDetailResponse.json()) as {
+      captures: Array<{ sessionId: string | null }>;
+    };
+    assert.equal(sessionDetailPayload.captures.length, 1);
+    assert.equal(sessionDetailPayload.captures[0]?.sessionId, "browser-session");
+
     const requestId = listPayload.captures[0]?.requestId;
     assert.ok(requestId);
 
@@ -256,6 +275,9 @@ test("gateway exposes capture history APIs and browser shell", async () => {
     assert.equal(appResponse.status, 200);
     const appHtml = await appResponse.text();
     assert.match(appHtml, /Prompt Gateway is almost ready|<div id="root"><\/div>/);
+
+    const sessionAppResponse = await fetch(`${gatewayInfo.url}/sessions/browser-session`);
+    assert.equal(sessionAppResponse.status, 200);
   } finally {
     await close(gatewayInfo.server);
     await close(upstreamInfo.server);
