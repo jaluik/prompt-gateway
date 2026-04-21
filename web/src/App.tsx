@@ -287,6 +287,45 @@ function formatDate(value: string, language: Language): string {
   }).format(new Date(value));
 }
 
+function LanguageIcon({ language }: { language: Language }): ReactNode {
+  return (
+    <span aria-hidden="true" className="language-badge">
+      {language === "en" ? "EN" : "中"}
+    </span>
+  );
+}
+
+function ThemeIcon({ theme }: { theme: Theme }): ReactNode {
+  if (theme === "dark") {
+    return (
+      <svg aria-hidden="true" className="control-icon" viewBox="0 0 24 24">
+        <path
+          d="M15.7 4.8a7.2 7.2 0 1 0 3.5 13.5 8 8 0 1 1-3.5-13.5Z"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.7"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" className="control-icon" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path
+        d="M12 3.75v2.5M12 17.75v2.5M20.25 12h-2.5M6.25 12h-2.5M17.83 6.17l-1.76 1.76M7.93 16.07l-1.76 1.76M17.83 17.83l-1.76-1.76M7.93 7.93 6.17 6.17"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
 function normalizeText(value: string | null | undefined): string {
   if (typeof value !== "string") {
     return "";
@@ -1043,40 +1082,32 @@ export function App() {
     });
   }, [captures, copy.error, copy.success, deferredQuery]);
 
+  const nextLanguage = language === "en" ? "zh" : "en";
+  const nextTheme = theme === "light" ? "dark" : "light";
+  const languageToggleLabel =
+    language === "en" ? `Switch to ${COPY.zh.languageZh}` : `切换到 ${COPY.en.languageEn}`;
+  const themeToggleLabel = theme === "light" ? `${copy.themeDark}` : `${copy.themeLight}`;
+
   const controls = (
     <div className="topbar-controls">
-      <div className="segmented-control">
-        <button
-          className={language === "en" ? "segment active" : "segment"}
-          onClick={() => setLanguage("en")}
-          type="button"
-        >
-          {copy.languageEn}
-        </button>
-        <button
-          className={language === "zh" ? "segment active" : "segment"}
-          onClick={() => setLanguage("zh")}
-          type="button"
-        >
-          {copy.languageZh}
-        </button>
-      </div>
-      <div className="segmented-control">
-        <button
-          className={theme === "light" ? "segment active" : "segment"}
-          onClick={() => setTheme("light")}
-          type="button"
-        >
-          {copy.themeLight}
-        </button>
-        <button
-          className={theme === "dark" ? "segment active" : "segment"}
-          onClick={() => setTheme("dark")}
-          type="button"
-        >
-          {copy.themeDark}
-        </button>
-      </div>
+      <button
+        aria-label={languageToggleLabel}
+        className="icon-toggle"
+        onClick={() => setLanguage(nextLanguage)}
+        title={languageToggleLabel}
+        type="button"
+      >
+        <LanguageIcon language={language} />
+      </button>
+      <button
+        aria-label={themeToggleLabel}
+        className="icon-toggle"
+        onClick={() => setTheme(nextTheme)}
+        title={themeToggleLabel}
+        type="button"
+      >
+        <ThemeIcon theme={theme} />
+      </button>
     </div>
   );
 
