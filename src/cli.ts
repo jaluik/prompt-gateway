@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
 import type http from "node:http";
+import os from "node:os";
 import path from "node:path";
 
 import { createGatewayServer } from "./server.js";
@@ -18,6 +20,12 @@ interface CliOverrides {
   upstreamApiKey?: string;
   upstreamApiVersion?: string;
   claudeCommand?: string;
+}
+
+type ClaudeSettingsEnv = Partial<Record<"ANTHROPIC_BASE_URL" | "ANTHROPIC_API_URL", string>>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {
@@ -189,16 +197,78 @@ function getClaudeCommand(overrides: CliOverrides): string {
   return overrides.claudeCommand || process.env.PROMPT_GATEWAY_CLAUDE_COMMAND || "claude";
 }
 
+function getClaudeSettingsPath(env: NodeJS.ProcessEnv): string {
+  const configDir = env.CLAUDE_CONFIG_DIR
+    ? path.resolve(env.CLAUDE_CONFIG_DIR)
+    : path.join(os.homedir(), ".claude");
+
+  return path.join(configDir, "settings.json");
+}
+
+async function readClaudeSettingsEnv(env: NodeJS.ProcessEnv): Promise<ClaudeSettingsEnv> {
+  try {
+    const settingsText = await fs.readFile(getClaudeSettingsPath(env), "utf8");
+    const settings = JSON.parse(settingsText) as unknown;
+    if (!isRecord(settings) || !isRecord(settings.env)) {
+      return {};
+    }
+
+    const settingsEnv: ClaudeSettingsEnv = {};
+    for (const key of ["ANTHROPIC_BASE_URL", "ANTHROPIC_API_URL"] as const) {
+      const value = settings.env[key];
+      if (typeof value === "string" && value.trim()) {
+        settingsEnv[key] = value;
+      }
+    }
+
+    return settingsEnv;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return {};
+    }
+
+    throw error;
+  }
+}
+
 function getWrappedUpstreamBaseUrl(
   env: NodeJS.ProcessEnv,
   overrides: CliOverrides,
+  claudeSettingsEnv: ClaudeSettingsEnv = {},
 ): string | undefined {
   return (
     overrides.upstreamBaseUrl ||
     env.PROMPT_GATEWAY_UPSTREAM_URL ||
+    claudeSettingsEnv.ANTHROPIC_BASE_URL ||
+    claudeSettingsEnv.ANTHROPIC_API_URL ||
     env.ANTHROPIC_BASE_URL ||
     env.ANTHROPIC_API_URL
   );
+}
+
+function shouldInjectClaudeSettings(claudeCommand: string): boolean {
+  return path.basename(claudeCommand).toLowerCase().includes("claude");
+}
+
+function getGatewayClaudeArgs(
+  claudeCommand: string,
+  claudeArgs: string[],
+  gatewayUrl: string,
+): string[] {
+  if (!shouldInjectClaudeSettings(claudeCommand)) {
+    return claudeArgs;
+  }
+
+  return [
+    "--settings",
+    JSON.stringify({
+      env: {
+        ANTHROPIC_BASE_URL: gatewayUrl,
+        ANTHROPIC_API_URL: gatewayUrl,
+      },
+    }),
+    ...claudeArgs,
+  ];
 }
 
 async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise<void> {
@@ -212,7 +282,8 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
     );
   }
 
-  const upstreamBaseUrl = getWrappedUpstreamBaseUrl(process.env, overrides);
+  const claudeSettingsEnv = await readClaudeSettingsEnv(process.env);
+  const upstreamBaseUrl = getWrappedUpstreamBaseUrl(process.env, overrides, claudeSettingsEnv);
   const config = getConfig({
     ...overrides,
     port: overrides.port ?? 0,
@@ -244,7 +315,8 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
   delete childEnv.ANTHROPIC_API_URL;
 
   const claudeCommand = getClaudeCommand(overrides);
-  const child = spawn(claudeCommand, claudeArgs, {
+  const childArgs = getGatewayClaudeArgs(claudeCommand, claudeArgs, address.url);
+  const child = spawn(claudeCommand, childArgs, {
     stdio: "inherit",
     env: childEnv,
     shell: process.platform === "win32",

@@ -23,6 +23,7 @@ npx prompt-gateway claude
 - 启动一个本地 HTTP gateway
 - 把当前 Claude Code 进程的 `ANTHROPIC_BASE_URL` 临时改到本地 gateway
 - 把真实上游地址保留下来，继续转发到真正的 Anthropic-compatible endpoint
+- 如果 Claude Code settings 里已有 `ANTHROPIC_BASE_URL`，例如由 `cc switch` 写入，会把它当作真实上游，并只覆盖本次 Claude Code 进程
 - 把每次请求记录成 JSON，并可选生成单条 HTML
 - 提供一个本地网页查看历史记录和详情
 
@@ -173,10 +174,14 @@ CLI 参数：
 
 如果没有显式指定上游，程序也会读取这些兼容变量：
 
+- Claude Code settings 里的 `env.ANTHROPIC_BASE_URL`
+- Claude Code settings 里的 `env.ANTHROPIC_API_URL`
 - `ANTHROPIC_BASE_URL`
 - `ANTHROPIC_API_URL`
 - `ANTHROPIC_API_KEY`
 - `ANTHROPIC_VERSION`
+
+Claude Code settings 默认读取 `~/.claude/settings.json`，如果设置了 `CLAUDE_CONFIG_DIR`，则读取对应目录下的 `settings.json`。
 
 默认真实上游是：
 
