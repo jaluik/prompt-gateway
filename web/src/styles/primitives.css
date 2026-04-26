@@ -1,0 +1,168 @@
+.page {
+  padding: 22px 24px 36px;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 5px 0 0;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.subtitle {
+  margin: 7px 0 0;
+  max-width: 860px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.button-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.button,
+.icon-button {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--text);
+  font-weight: 650;
+  box-shadow: var(--shadow-sm);
+}
+
+.button {
+  padding: 0 12px;
+}
+
+.button.primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+.button.primary:hover {
+  border-color: var(--brand-strong);
+  background: var(--brand-strong);
+}
+
+.button.active {
+  border-color: #bfdbfe;
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+.icon-button {
+  width: 36px;
+  padding: 0;
+}
+
+.button:hover,
+.icon-button:hover {
+  border-color: var(--border-strong);
+  background: #f8fafc;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.metric-tile {
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.metric-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.metric-label svg {
+  color: var(--text-soft);
+}
+
+.metric-value {
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.metric-caption {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.panel {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.panel-head {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 750;
+}
+
+.panel-title svg {
+  color: var(--text-muted);
+}
+
+.panel-body {
+  padding: 14px;
+}
