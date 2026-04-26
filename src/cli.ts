@@ -47,7 +47,7 @@ Usage:
 
 Options:
   --host <value>              Listen host
-  --port <value>              Listen port
+  --port <value>              Listen port, falls back to an available port if busy
   --output <path>             Output directory for JSON and HTML captures
   --upstream-url <url>        Upstream base URL
   --api-key <value>           Upstream API key
@@ -157,8 +157,51 @@ async function listenServer(
   host: string,
   port: number,
 ): Promise<{ host: string; port: number; url: string }> {
-  await new Promise<void>((resolve) => {
-    server.listen(port, host, () => resolve());
+  try {
+    return await listenServerOnce(server, host, port);
+  } catch (error) {
+    if (port === 0 || (error as NodeJS.ErrnoException).code !== "EADDRINUSE") {
+      throw error;
+    }
+
+    const address = await listenServerOnce(server, host, 0);
+    process.stdout.write(
+      `[prompt-gateway] Port ${port} on ${host} is already in use; using ${address.url} instead.\n`,
+    );
+    return address;
+  }
+}
+
+async function listenServerOnce(
+  server: http.Server,
+  host: string,
+  port: number,
+): Promise<{ host: string; port: number; url: string }> {
+  await new Promise<void>((resolve, reject) => {
+    let cleanup = (): void => {};
+    const onError = (error: Error): void => {
+      cleanup();
+      reject(error);
+    };
+    const onListening = (): void => {
+      cleanup();
+      resolve();
+    };
+
+    cleanup = (): void => {
+      server.off("error", onError);
+      server.off("listening", onListening);
+    };
+
+    server.once("error", onError);
+    server.once("listening", onListening);
+
+    try {
+      server.listen(port, host);
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
   });
 
   const address = server.address();
