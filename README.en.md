@@ -30,7 +30,7 @@ Start Claude Code through the gateway:
 npx prompt-gateway claude
 ```
 
-Then use Claude Code as usual. The gateway starts on:
+Then use Claude Code as usual. The gateway starts at the URL below by default; if that port is already in use, startup output shows the automatically selected replacement URL:
 
 ```text
 http://127.0.0.1:8787/
@@ -93,7 +93,7 @@ Common sensitive headers are redacted by default:
 3. Resolves your real Anthropic-compatible upstream from flags, environment variables, or Claude Code settings.
 4. Forwards `/v1/messages` to the real upstream.
 5. Saves the captured request and response locally.
-6. Serves the capture browser at `http://127.0.0.1:8787/`.
+6. Serves the capture browser at `http://127.0.0.1:8787/`; if that port is already in use, it automatically selects another available port.
 
 If Claude Code settings already contain `ANTHROPIC_BASE_URL` or `ANTHROPIC_API_URL`, the wrapper uses that as the real upstream and only overrides the launched Claude Code process.
 
@@ -142,7 +142,7 @@ CLI options:
 | Option | Default | Description |
 | --- | --- | --- |
 | `--host <value>` | `127.0.0.1` | Local gateway host. |
-| `--port <value>` | `8787` | Local gateway port. |
+| `--port <value>` | `8787` | Local gateway port; if it is already in use, another available port is selected automatically. |
 | `--output <path>` | `.claude/prompt-gateway` | Capture output directory. |
 | `--upstream-url <url>` | `https://api.anthropic.com` | Real Anthropic-compatible base URL. |
 | `--api-key <value>` | environment | Upstream API key. |

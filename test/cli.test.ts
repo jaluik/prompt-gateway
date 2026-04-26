@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
+import http from "node:http";
 import path from "node:path";
 import { promisify } from "node:util";
 
 import { test } from "./harness.js";
-import { createTempDir } from "./helpers.js";
+import { close, createTempDir, listen } from "./helpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -113,4 +114,59 @@ console.log(JSON.stringify({
   assert.equal(payload.settings?.env?.ANTHROPIC_API_URL, payload.base);
   assert.equal(payload.args?.[0], "--settings");
   assert.equal(payload.args?.[2], "--print");
+});
+
+test("claude wrapper falls back when the configured gateway port is already in use", async () => {
+  const cliPath = path.resolve(".test-dist/src/cli.js");
+  const configDir = await createTempDir("prompt-gateway-cli-config");
+  const blocker = http.createServer((_, response) => {
+    response.end("busy");
+  });
+  const blockerInfo = await listen(blocker);
+  const occupiedPort = Number(new URL(blockerInfo.url).port);
+
+  try {
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      [
+        cliPath,
+        "claude",
+        "--claude-command",
+        process.execPath,
+        "--",
+        "-e",
+        "console.log(JSON.stringify({ base: process.env.ANTHROPIC_BASE_URL }))",
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          ANTHROPIC_BASE_URL: "https://litellm.example.com/anthropic",
+          CLAUDE_CONFIG_DIR: configDir,
+          PROMPT_GATEWAY_PORT: String(occupiedPort),
+        },
+      },
+    );
+
+    assert.match(
+      stdout,
+      new RegExp(
+        `Port ${occupiedPort} on 127\\.0\\.0\\.1 is already in use; using http://127\\.0\\.0\\.1:\\d+ instead\\.`,
+      ),
+    );
+
+    const lines = stdout.trim().split("\n");
+    const payloadLine = lines[lines.length - 1];
+    assert.ok(payloadLine);
+
+    const payload = JSON.parse(payloadLine) as {
+      base?: string;
+    };
+    const gatewayUrl = new URL(payload.base || "");
+
+    assert.equal(gatewayUrl.hostname, "127.0.0.1");
+    assert.notEqual(Number(gatewayUrl.port), occupiedPort);
+  } finally {
+    await close(blockerInfo.server);
+  }
 });
