@@ -1,7 +1,7 @@
 {
   "name": "prompt-gateway",
   "version": "0.0.3",
-  "description": "Local LLM gateway for capturing Claude Code prompt payloads.",
+  "description": "Capture and inspect Claude Code /v1/messages payloads locally.",
   "repository": {
     "type": "git",
     "url": "https://github.com/jaluik/prompt-gateway"
@@ -10,6 +10,8 @@
   "packageManager": "pnpm@10.33.2",
   "files": [
     "dist",
+    "docs/assets/readme",
+    "README.en.md",
     "README.md"
   ],
   "main": "./dist/index.js",
