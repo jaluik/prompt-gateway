@@ -1,0 +1,1774 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>prompt-gateway Session List</title>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --surface: #ffffff;
+      --surface-subtle: #f9fafb;
+      --surface-strong: #eef2f7;
+      --border: #d8dee8;
+      --border-strong: #bdc7d5;
+      --text: #182230;
+      --text-muted: #667085;
+      --text-soft: #98a2b3;
+      --brand: #2563eb;
+      --brand-strong: #1d4ed8;
+      --brand-soft: #dbeafe;
+      --teal: #0f766e;
+      --teal-soft: #ccfbf1;
+      --amber: #b45309;
+      --amber-soft: #fef3c7;
+      --rose: #be123c;
+      --rose-soft: #ffe4e6;
+      --violet: #6d28d9;
+      --violet-soft: #ede9fe;
+      --shadow-sm: 0 1px 2px rgb(16 24 40 / 6%);
+      --shadow-md: 0 10px 30px rgb(16 24 40 / 10%);
+      --radius: 8px;
+      --radius-sm: 6px;
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      width: 100%;
+      min-width: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, #fbfcfe 0, var(--bg) 260px);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    svg[data-lucide] {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+      stroke-width: 2;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app {
+      min-height: 100vh;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgb(255 255 255 / 92%);
+      backdrop-filter: blur(14px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: auto;
+      min-width: 226px;
+      flex: 0 0 auto;
+      color: var(--text);
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #9fb7ff;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #ffffff, #e0ecff);
+      color: var(--brand);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .brand-mark svg[data-lucide] {
+      width: 18px;
+      height: 18px;
+    }
+
+    .brand-subtitle {
+      display: block;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.2;
+      margin-top: 1px;
+    }
+
+    .top-search {
+      position: relative;
+      flex: 1;
+      min-width: 240px;
+      max-width: none;
+    }
+
+    .top-search i,
+    .top-search svg[data-lucide] {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      width: 16px;
+      height: 16px;
+      transform: translateY(-50%);
+      color: var(--text-soft);
+    }
+
+    .top-search input {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px 0 36px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    .top-search input:focus {
+      border-color: #8bb1ff;
+      box-shadow: 0 0 0 3px rgb(37 99 235 / 12%);
+    }
+
+    .route-pill {
+      min-width: 0;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fff;
+      color: var(--text-muted);
+      box-shadow: var(--shadow-sm);
+      flex: 0 1 360px;
+    }
+
+    .route-pill i,
+    .route-pill svg[data-lucide],
+    .icon-button i,
+    .icon-button svg[data-lucide],
+    .button i,
+    .button svg[data-lucide],
+    .toolbar-button i,
+    .toolbar-button svg[data-lucide] {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+    }
+
+    .route-pill span {
+      overflow: hidden;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 750;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--brand-strong);
+    }
+
+    .page {
+      display: none;
+      padding: 22px 24px 36px;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    .page-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .title {
+      margin: 5px 0 0;
+      color: var(--text);
+      font-size: 24px;
+      font-weight: 750;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      margin: 7px 0 0;
+      max-width: 820px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .button-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .button,
+    .icon-button,
+    .toolbar-button {
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      color: var(--text);
+      font-weight: 650;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .button {
+      padding: 0 12px;
+    }
+
+    .button.primary {
+      border-color: var(--brand);
+      background: var(--brand);
+      color: #fff;
+    }
+
+    .button.primary:hover {
+      background: var(--brand-strong);
+    }
+
+    .icon-button,
+    .toolbar-button {
+      width: 36px;
+      padding: 0;
+    }
+
+    .button:hover,
+    .icon-button:hover,
+    .toolbar-button:hover {
+      border-color: var(--border-strong);
+      background: #f8fafc;
+    }
+
+    .button.primary:hover {
+      border-color: var(--brand-strong);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .metric-tile {
+      min-height: 92px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .metric-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .metric-label i,
+    .metric-label svg[data-lucide] {
+      width: 16px;
+      height: 16px;
+      color: var(--text-soft);
+    }
+
+    .metric-value {
+      margin-top: 10px;
+      color: var(--text);
+      font-size: 28px;
+      font-weight: 760;
+      line-height: 1;
+    }
+
+    .metric-caption {
+      margin-top: 8px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 342px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .content-grid > .panel:first-child {
+      overflow-x: auto;
+    }
+
+    .panel-head {
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .panel-title i,
+    .panel-title svg[data-lucide] {
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+    }
+
+    .panel-body {
+      padding: 14px;
+    }
+
+    .filter-bar {
+      display: grid;
+      grid-template-columns: minmax(260px, 1.8fr) repeat(4, minmax(120px, 1fr)) auto;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-subtle);
+    }
+
+    .field {
+      position: relative;
+    }
+
+    .field i,
+    .field svg[data-lucide] {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      width: 15px;
+      height: 15px;
+      transform: translateY(-50%);
+      color: var(--text-soft);
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    .field input {
+      padding: 0 10px 0 32px;
+    }
+
+    .field select {
+      padding: 0 30px 0 10px;
+    }
+
+    .session-table {
+      width: 100%;
+      min-width: 1040px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .session-table th {
+      height: 42px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      background: #fff;
+      font-size: 11px;
+      font-weight: 750;
+      text-align: left;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .session-table td {
+      height: 72px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .session-table tbody tr {
+      transition: background 160ms ease;
+    }
+
+    .session-table tbody tr[data-view-target],
+    .session-table tbody tr[onclick] {
+      cursor: pointer;
+    }
+
+    .session-table tbody tr:hover,
+    .session-table tbody tr.selected {
+      background: #f8fbff;
+    }
+
+    .session-table tbody tr.selected td:first-child {
+      box-shadow: inset 3px 0 0 var(--brand);
+    }
+
+    .session-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 250px;
+    }
+
+    .session-dot {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #b7cffd;
+      border-radius: var(--radius-sm);
+      background: #eef5ff;
+      color: var(--brand-strong);
+      flex: 0 0 auto;
+    }
+
+    .session-dot i,
+    .session-dot svg[data-lucide] {
+      width: 17px;
+      height: 17px;
+    }
+
+    .session-id {
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .session-desc {
+      margin-top: 3px;
+      max-width: 360px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mono {
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .muted {
+      color: var(--text-muted);
+    }
+
+    .soft {
+      color: var(--text-soft);
+    }
+
+    .badge-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge i,
+    .badge svg[data-lucide] {
+      width: 13px;
+      height: 13px;
+    }
+
+    .badge.blue {
+      border-color: #bfdbfe;
+      background: var(--brand-soft);
+      color: #1e40af;
+    }
+
+    .badge.teal {
+      border-color: #99f6e4;
+      background: var(--teal-soft);
+      color: #115e59;
+    }
+
+    .badge.amber {
+      border-color: #fde68a;
+      background: var(--amber-soft);
+      color: #92400e;
+    }
+
+    .badge.rose {
+      border-color: #fecdd3;
+      background: var(--rose-soft);
+      color: #9f1239;
+    }
+
+    .badge.violet {
+      border-color: #ddd6fe;
+      background: var(--violet-soft);
+      color: #5b21b6;
+    }
+
+    .density {
+      width: 132px;
+    }
+
+    .mini-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: #e7ebf1;
+      overflow: hidden;
+    }
+
+    .mini-bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #2dd4bf, var(--brand));
+    }
+
+    .density-caption {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .preview-panel {
+      position: sticky;
+      top: 86px;
+    }
+
+    .preview-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .preview-title .session-dot {
+      width: 38px;
+      height: 38px;
+    }
+
+    .preview-block {
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .preview-block:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .block-label {
+      margin-bottom: 8px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .kv-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .kv {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .kv strong {
+      color: var(--text);
+      font-weight: 750;
+      text-align: right;
+    }
+
+    .sparkline {
+      height: 64px;
+      display: grid;
+      grid-template-columns: repeat(18, 1fr);
+      align-items: end;
+      gap: 4px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-subtle);
+    }
+
+    .sparkline span {
+      display: block;
+      min-height: 8px;
+      border-radius: 4px 4px 2px 2px;
+      background: #9cc3ff;
+    }
+
+    .request-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .request-list-item {
+      display: grid;
+      grid-template-columns: 34px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #fff;
+    }
+
+    .request-index {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-sm);
+      background: var(--surface-strong);
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .truncate {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .detail-shell {
+      display: grid;
+      grid-template-columns: 286px minmax(560px, 1fr) 360px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .detail-shell > * {
+      min-width: 0;
+    }
+
+    .session-summary-bar {
+      display: grid;
+      grid-template-columns: auto minmax(300px, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .summary-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .summary-title h2 {
+      margin: 0;
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    .summary-title p {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .summary-metrics {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .timeline {
+      max-height: calc(100vh - 158px);
+      overflow: auto;
+    }
+
+    .timeline-filter {
+      display: flex;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-subtle);
+    }
+
+    .timeline-filter .button {
+      height: 32px;
+      flex: 1;
+      padding: 0 8px;
+      font-size: 12px;
+    }
+
+    .timeline-list {
+      padding: 10px;
+    }
+
+    .timeline-item {
+      position: relative;
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 10px;
+      padding: 10px 8px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: transparent;
+    }
+
+    .timeline-item + .timeline-item {
+      margin-top: 5px;
+    }
+
+    .timeline-item:hover,
+    .timeline-item.active {
+      border-color: #bfd6ff;
+      background: #f7fbff;
+    }
+
+    .timeline-node {
+      position: relative;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 800;
+      z-index: 1;
+    }
+
+    .timeline-item.active .timeline-node {
+      border-color: var(--brand);
+      background: var(--brand);
+      color: #fff;
+    }
+
+    .timeline-content {
+      min-width: 0;
+    }
+
+    .timeline-main {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .timeline-time {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-family: var(--mono);
+    }
+
+    .timeline-prompt {
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .overview-card {
+      min-height: 74px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .overview-card .label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .overview-card .label i,
+    .overview-card .label svg[data-lucide] {
+      width: 14px;
+      height: 14px;
+    }
+
+    .overview-card .value {
+      margin-top: 8px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .segmented {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface-subtle);
+    }
+
+    .segment {
+      height: 30px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .segment.active {
+      background: #fff;
+      color: var(--brand-strong);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .context-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stack-layer {
+      display: grid;
+      grid-template-columns: 168px minmax(0, 1fr) 106px;
+      gap: 12px;
+      align-items: stretch;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .stack-layer:hover,
+    .stack-layer.selected {
+      border-color: #9ec5ff;
+      box-shadow: 0 0 0 3px rgb(37 99 235 / 9%);
+    }
+
+    .layer-label {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+    }
+
+    .layer-icon {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-sm);
+      background: var(--surface-strong);
+      color: var(--text-muted);
+      flex: 0 0 auto;
+    }
+
+    .layer-icon i,
+    .layer-icon svg[data-lucide] {
+      width: 16px;
+      height: 16px;
+    }
+
+    .layer-title {
+      color: var(--text);
+      font-weight: 780;
+    }
+
+    .layer-path {
+      margin-top: 3px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .layer-copy {
+      min-width: 0;
+    }
+
+    .layer-summary {
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    .layer-meta {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .layer-size {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 7px;
+      border-left: 1px solid var(--border);
+      padding-left: 12px;
+    }
+
+    .size-number {
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .size-label {
+      color: var(--text-muted);
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .layer-system .layer-icon {
+      background: #e9edf4;
+      color: #475467;
+    }
+
+    .layer-tool .layer-icon {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .layer-conversation .layer-icon {
+      background: var(--teal-soft);
+      color: var(--teal);
+    }
+
+    .layer-user .layer-icon {
+      background: var(--brand-soft);
+      color: var(--brand-strong);
+    }
+
+    .layer-context .layer-icon {
+      background: var(--rose-soft);
+      color: var(--rose);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 18px 0 10px;
+    }
+
+    .section-title h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    .section-title h3 i,
+    .section-title h3 svg[data-lucide] {
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+    }
+
+    .message-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .message-row {
+      display: grid;
+      grid-template-columns: 118px minmax(0, 1fr) 126px;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .message-role {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .role-dot {
+      width: 9px;
+      height: 9px;
+      margin-top: 5px;
+      border-radius: 999px;
+      background: var(--brand);
+      flex: 0 0 auto;
+    }
+
+    .role-dot.assistant {
+      background: var(--teal);
+    }
+
+    .message-preview {
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    .message-path {
+      margin-top: 5px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .message-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .tool-table {
+      width: 100%;
+      display: block;
+      overflow-x: auto;
+      border-collapse: collapse;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .tool-table th,
+    .tool-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .tool-table th {
+      color: var(--text-muted);
+      background: var(--surface-subtle);
+      font-size: 11px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .tool-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .inspector {
+      position: sticky;
+      top: 86px;
+      max-height: calc(100vh - 100px);
+      overflow: auto;
+    }
+
+    .inspector-path {
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface-subtle);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    .inspector-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .inspector-stat {
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #fff;
+    }
+
+    .inspector-stat .label {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .inspector-stat .value {
+      margin-top: 6px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .code-box {
+      max-height: 320px;
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #0f172a;
+      color: #dbeafe;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .field-tree {
+      display: grid;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .tree-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .raw-json {
+      max-height: 280px;
+      overflow: auto;
+      margin-top: 10px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #111827;
+      color: #d1fae5;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre;
+    }
+
+    .callout {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 12px;
+      border: 1px solid #bfdbfe;
+      border-radius: var(--radius);
+      background: #eff6ff;
+      color: #1e3a8a;
+      line-height: 1.45;
+    }
+
+    .callout > div {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .callout i,
+    .callout svg[data-lucide] {
+      width: 17px;
+      height: 17px;
+      margin-top: 1px;
+      flex: 0 0 auto;
+    }
+
+    .copy-rail {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .small-note {
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 1180px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .preview-panel {
+        position: static;
+      }
+
+      .detail-shell {
+        grid-template-columns: 270px minmax(0, 1fr);
+      }
+
+      .inspector {
+        grid-column: 1 / -1;
+        position: static;
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .topbar {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 12px 16px;
+      }
+
+      .brand,
+      .top-search,
+      .route-pill {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .page {
+        padding: 18px 16px 28px;
+      }
+
+      .page-head {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .session-summary-bar {
+        grid-template-columns: 1fr;
+      }
+
+      .session-summary-bar > .button {
+        justify-self: start;
+      }
+
+      .button-row,
+      .summary-metrics {
+        justify-content: flex-start;
+      }
+
+      .filter-bar {
+        grid-template-columns: 1fr;
+      }
+
+      .session-table {
+        min-width: 0;
+      }
+
+      .session-table th:nth-child(2),
+      .session-table td:nth-child(2),
+      .session-table th:nth-child(4),
+      .session-table td:nth-child(4),
+      .session-table th:nth-child(5),
+      .session-table td:nth-child(5),
+      .session-table th:nth-child(7),
+      .session-table td:nth-child(7),
+      .session-table th:nth-child(8),
+      .session-table td:nth-child(8) {
+        display: none;
+      }
+
+      .session-name {
+        min-width: 0;
+      }
+
+      .session-desc {
+        max-width: 260px;
+      }
+
+      .detail-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .timeline,
+      .inspector {
+        position: static;
+        max-height: none;
+      }
+
+      .timeline-filter {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .segmented {
+        width: 100%;
+        overflow-x: auto;
+      }
+
+      .stack-layer,
+      .message-row {
+        grid-template-columns: 1fr;
+      }
+
+      .layer-size {
+        border-left: 0;
+        border-top: 1px solid var(--border);
+        padding-left: 0;
+        padding-top: 10px;
+      }
+
+      .size-number,
+      .size-label {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"><i data-lucide="route"></i></div>
+        <div>
+          prompt-gateway
+          <span class="brand-subtitle">Claude Code request lens</span>
+        </div>
+      </div>
+
+      <div class="top-search">
+        <i data-lucide="search"></i>
+        <input value="" placeholder="搜索 sessionId、requestId、用户输入或工具名">
+      </div>
+
+      <div class="route-pill" aria-label="当前页面路径">
+        <i data-lucide="map"></i>
+        <span id="route-label">/sessions</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="page active" id="page-list">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow"><i data-lucide="database"></i> 捕获会话</div>
+            <h1 class="title">Session 列表页</h1>
+            <p class="subtitle">从 session 维度浏览 Claude Code CLI 的请求轨迹，优先暴露请求数量、上下文规模、模型、工具数量和最近用户输入。</p>
+          </div>
+          <div class="button-row">
+            <button class="button"><i data-lucide="calendar-days"></i> 最近 24 小时</button>
+            <button class="button"><i data-lucide="download"></i> 导出视图</button>
+            <button class="button primary" onclick="window.location.href='prompt-gateway-session-detail.html'"><i data-lucide="arrow-right"></i> 查看选中 Session</button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="metric-tile">
+            <div class="metric-label">Sessions <i data-lucide="messages-square"></i></div>
+            <div class="metric-value">128</div>
+            <div class="metric-caption">今天捕获 34 个新会话</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-label">Requests <i data-lucide="send"></i></div>
+            <div class="metric-value">4,892</div>
+            <div class="metric-caption">平均每个 session 38.2 次请求</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-label">Max Context <i data-lucide="gauge"></i></div>
+            <div class="metric-value">183k</div>
+            <div class="metric-caption">按字符估算，非精确 token</div>
+          </div>
+          <div class="metric-tile">
+            <div class="metric-label">Tool Heavy <i data-lucide="wrench"></i></div>
+            <div class="metric-value">46</div>
+            <div class="metric-caption">包含 20 个以上工具定义的 session</div>
+          </div>
+        </div>
+
+        <div class="content-grid">
+          <section class="panel">
+            <div class="filter-bar">
+              <div class="field">
+                <i data-lucide="search"></i>
+                <input value="claude-sonnet-4-6" aria-label="搜索关键词">
+              </div>
+              <div class="field">
+                <select aria-label="模型">
+                  <option>全部模型</option>
+                  <option selected>claude-sonnet-4-6</option>
+                  <option>claude-opus-4-6</option>
+                </select>
+              </div>
+              <div class="field">
+                <select aria-label="工具">
+                  <option selected>包含工具定义</option>
+                  <option>包含工具调用</option>
+                  <option>无工具调用</option>
+                </select>
+              </div>
+              <div class="field">
+                <select aria-label="上下文">
+                  <option>全部上下文规模</option>
+                  <option selected>大于 100k</option>
+                  <option>小于 100k</option>
+                </select>
+              </div>
+              <div class="field">
+                <select aria-label="排序">
+                  <option selected>最近更新优先</option>
+                  <option>请求数最多</option>
+                  <option>上下文最大</option>
+                </select>
+              </div>
+              <button class="icon-button" aria-label="刷新"><i data-lucide="refresh-cw"></i></button>
+            </div>
+
+            <table class="session-table">
+              <thead>
+                <tr>
+                  <th>Session</th>
+                  <th>Time Range</th>
+                  <th>Requests</th>
+                  <th>Models</th>
+                  <th>Context Size</th>
+                  <th>Tools</th>
+                  <th>Changes</th>
+                  <th>Last Prompt</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="selected" onclick="window.location.href='prompt-gateway-session-detail.html'">
+                  <td>
+                    <div class="session-name">
+                      <div class="session-dot"><i data-lucide="terminal"></i></div>
+                      <div>
+                        <div class="session-id">36dacaac...4402</div>
+                        <div class="session-desc">我试试效果 / 测试效果32</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="mono">2026-04-25 15:18</div>
+                    <div class="muted">持续 10m 42s</div>
+                  </td>
+                  <td><strong>48</strong></td>
+                  <td><span class="badge blue">sonnet-4-6</span></td>
+                  <td>
+                    <div class="density">
+                      <div class="mini-bar"><span style="width: 86%"></span></div>
+                      <div class="density-caption"><span>183k</span><span>estimated</span></div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="badge-row">
+                      <span class="badge amber"><i data-lucide="wrench"></i> 28</span>
+                      <span class="badge teal">tool_use</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="badge-row">
+                      <span class="badge rose">context edit</span>
+                      <span class="badge violet">cache</span>
+                    </div>
+                  </td>
+                  <td class="truncate" style="max-width: 190px;">测试效果32</td>
+                </tr>
+
+                <tr>
+                  <td>
+                    <div class="session-name">
+                      <div class="session-dot"><i data-lucide="terminal"></i></div>
+                      <div>
+                        <div class="session-id">9f22b7a1...1e09</div>
+                        <div class="session-desc">修复 CLI 测试并检查 pnpm 失败</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="mono">2026-04-25 11:03</div>
+                    <div class="muted">持续 34m 08s</div>
+                  </td>
+                  <td><strong>91</strong></td>
+                  <td><span class="badge blue">sonnet-4-6</span></td>
+                  <td>
+                    <div class="density">
+                      <div class="mini-bar"><span style="width: 74%"></span></div>
+                      <div class="density-caption"><span>151k</span><span>estimated</span></div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="badge-row">
+                      <span class="badge amber"><i data-lucide="wrench"></i> 31</span>
+                    </div>
+                  </td>
+                  <td><span class="badge teal">+ tool result</span></td>
+                  <td class="truncate" style="max-width: 190px;">继续修复 review comments</td>
+                </tr>
+
+                <tr>
+                  <td>
+                    <div class="session-name">
+                      <div class="session-dot"><i data-lucide="terminal"></i></div>
+                      <div>
+                        <div class="session-id">0a9815bd...7c23</div>
+                        <div class="session-desc">生成请求分析 UI 的 PRD</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="mono">2026-04-24 22:31</div>
+                    <div class="muted">持续 18m 19s</div>
+                  </td>
+                  <td><strong>27</strong></td>
+                  <td><span class="badge blue">sonnet-4-6</span></td>
+                  <td>
+                    <div class="density">
+                      <div class="mini-bar"><span style="width: 52%"></span></div>
+                      <div class="density-caption"><span>98k</span><span>estimated</span></div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="badge-row">
+                      <span class="badge amber"><i data-lucide="wrench"></i> 24</span>
+                    </div>
+                  </td>
+                  <td><span class="badge blue">+ user message</span></td>
+                  <td class="truncate" style="max-width: 190px;">请设计一个 prd 文档</td>
+                </tr>
+
+                <tr>
+                  <td>
+                    <div class="session-name">
+                      <div class="session-dot"><i data-lucide="terminal"></i></div>
+                      <div>
+                        <div class="session-id">c7b4e460...ab71</div>
+                        <div class="session-desc">分析 prompt cache 命中情况</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="mono">2026-04-24 19:42</div>
+                    <div class="muted">持续 07m 55s</div>
+                  </td>
+                  <td><strong>12</strong></td>
+                  <td><span class="badge blue">sonnet-4-6</span></td>
+                  <td>
+                    <div class="density">
+                      <div class="mini-bar"><span style="width: 36%"></span></div>
+                      <div class="density-caption"><span>64k</span><span>estimated</span></div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="badge-row">
+                      <span class="badge amber"><i data-lucide="wrench"></i> 18</span>
+                    </div>
+                  </td>
+                  <td><span class="badge violet">cache</span></td>
+                  <td class="truncate" style="max-width: 190px;">看看 cache_control 在哪里</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <aside class="panel preview-panel">
+            <div class="panel-head">
+              <div class="panel-title"><i data-lucide="panel-right"></i> Session 预览</div>
+              <button class="icon-button" aria-label="复制 sessionId"><i data-lucide="copy"></i></button>
+            </div>
+            <div class="panel-body">
+              <div class="preview-title">
+                <div class="session-dot"><i data-lucide="terminal"></i></div>
+                <div>
+                  <div class="session-id">36dacaac-c42a-4dc0-9017-b42bd43c4402</div>
+                  <div class="muted">最后更新 15:28:36</div>
+                </div>
+              </div>
+
+              <div class="preview-block">
+                <div class="block-label">摘要</div>
+                <div class="kv-list">
+                  <div class="kv"><span>Requests</span><strong>48</strong></div>
+                  <div class="kv"><span>Tools</span><strong>28 definitions</strong></div>
+                  <div class="kv"><span>Model</span><strong>claude-sonnet-4-6</strong></div>
+                  <div class="kv"><span>Largest layer</span><strong>System rules</strong></div>
+                </div>
+              </div>
+
+              <div class="preview-block">
+                <div class="block-label">上下文增长</div>
+                <div class="sparkline">
+                  <span style="height: 22%"></span>
+                  <span style="height: 30%"></span>
+                  <span style="height: 36%"></span>
+                  <span style="height: 42%"></span>
+                  <span style="height: 46%"></span>
+                  <span style="height: 52%"></span>
+                  <span style="height: 55%"></span>
+                  <span style="height: 58%"></span>
+                  <span style="height: 60%"></span>
+                  <span style="height: 63%"></span>
+                  <span style="height: 66%"></span>
+                  <span style="height: 68%"></span>
+                  <span style="height: 70%"></span>
+                  <span style="height: 74%"></span>
+                  <span style="height: 77%"></span>
+                  <span style="height: 82%"></span>
+                  <span style="height: 86%"></span>
+                  <span style="height: 90%"></span>
+                </div>
+              </div>
+
+              <div class="preview-block">
+                <div class="block-label">最近请求</div>
+                <div class="request-list">
+                  <div class="request-list-item">
+                    <div class="request-index">46</div>
+                    <div class="truncate">你好！看起来你想测试...</div>
+                    <span class="badge teal">assistant</span>
+                  </div>
+                  <div class="request-list-item">
+                    <div class="request-index">47</div>
+                    <div class="truncate">我试试效果</div>
+                    <span class="badge blue">user</span>
+                  </div>
+                  <div class="request-list-item">
+                    <div class="request-index">48</div>
+                    <div class="truncate">测试效果32</div>
+                    <span class="badge rose">context edit</span>
+                  </div>
+                </div>
+              </div>
+
+              <button class="button primary" style="width: 100%;" onclick="window.location.href='prompt-gateway-session-detail.html'">
+                <i data-lucide="panel-right-open"></i>
+                打开详情页
+              </button>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

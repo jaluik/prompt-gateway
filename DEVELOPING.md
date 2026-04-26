@@ -5,7 +5,16 @@
 ## 环境要求
 
 - Node.js `18` 或更高版本
-- 建议使用 `pnpm 8` 或更高版本
+- pnpm `10.33.2`，由 `package.json` 的 `packageManager` 字段固定
+
+建议通过 Corepack 使用仓库声明的 pnpm 版本：
+
+```bash
+corepack enable
+corepack prepare pnpm@10.33.2 --activate
+```
+
+仓库通过 `pnpm-workspace.yaml` 显式允许 `esbuild` 的安装脚本，避免 pnpm 10 在全新安装时提示未审查的依赖 build script。
 
 安装依赖：
 

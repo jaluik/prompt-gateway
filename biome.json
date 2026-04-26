@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
@@ -14,6 +14,13 @@
     }
   },
   "files": {
-    "includes": ["**", "!dist", "!.test-dist", "!node_modules", "!.claude/prompt-gateway"]
+    "includes": [
+      "**",
+      "!dist",
+      "!.test-dist",
+      "!node_modules",
+      "!.claude/prompt-gateway",
+      "!web/docs"
+    ]
   }
 }
