@@ -22,7 +22,11 @@ export function MessagesView({
       <div className="message-list">
         {analysis.messages.map((message) => (
           <article
-            className={message.isLatestUser ? "message-row latest" : "message-row"}
+            className={
+              message.isLatestUserInput || message.isRequestTrigger
+                ? "message-row latest"
+                : "message-row"
+            }
             key={message.path}
           >
             <button className="message-role" onClick={() => onSelect(message.path)} type="button">
@@ -57,7 +61,19 @@ export function MessagesView({
               </details>
             </div>
             <div className="message-meta">
-              {message.isLatestUser ? <Badge label="latest input" tone="blue" /> : null}
+              {message.isLatestUserInput ? <Badge label="latest input" tone="blue" /> : null}
+              {message.isRequestTrigger ? (
+                <Badge
+                  label="request trigger"
+                  tone={
+                    analysis.trigger.kind === "tool_result"
+                      ? "amber"
+                      : analysis.trigger.kind === "user_input"
+                        ? "blue"
+                        : undefined
+                  }
+                />
+              ) : null}
               {message.hasSystemReminder ? <Badge label="system reminder" tone="rose" /> : null}
               {message.hasThinking ? <Badge label="thinking" tone="teal" /> : null}
               {message.hasToolUse ? <Badge label="tool_use" tone="amber" /> : null}

@@ -186,6 +186,8 @@ function timelineHaystack(analysis: RequestAnalysis): string {
     analysis.capture.requestId,
     analysis.model,
     analysis.latestUserBlock?.text ?? "",
+    analysis.trigger.preview,
+    analysis.trigger.label,
     analysis.capture.derived.promptTextPreview,
     analysis.tools.map((tool) => tool.name).join(" "),
     analysis.diff.badges.join(" "),

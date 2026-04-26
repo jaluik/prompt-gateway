@@ -13,7 +13,14 @@ import { formatCompactNumber } from "./format";
 
 type LayerInputs = Pick<
   RequestAnalysis,
-  "systemBlocks" | "tools" | "messages" | "toolCalls" | "latestUserBlock" | "diff" | "sizes"
+  | "systemBlocks"
+  | "tools"
+  | "messages"
+  | "toolCalls"
+  | "latestUserBlock"
+  | "trigger"
+  | "diff"
+  | "sizes"
 > & {
   raw: Record<string, unknown>;
   maxTokens: number | null;
@@ -29,9 +36,14 @@ export function buildLayers(input: LayerInputs): StackLayer[] {
   const biggestTools = [...input.tools]
     .sort((left, right) => right.descriptionSize - left.descriptionSize)
     .slice(0, 2);
-  const latestUserSummary = input.latestUserBlock
-    ? input.latestUserBlock.preview
-    : "No latest user input found";
+  const latestLayerTitle =
+    input.trigger.kind === "user_input" ? "Latest User Input" : "Request Trigger";
+  const latestLayerBadge =
+    input.trigger.kind === "tool_result"
+      ? ({ label: "tool result trigger", tone: "amber" } as const)
+      : input.trigger.kind === "user_input"
+        ? ({ label: "actual user input", tone: "blue" } as const)
+        : ({ label: "unknown trigger" } as const);
 
   return [
     {
@@ -56,20 +68,23 @@ export function buildLayers(input: LayerInputs): StackLayer[] {
     makeMessagesLayer(input),
     {
       key: "latest",
-      title: "Latest User Input",
-      path: input.latestUserBlock?.path ?? "requestBody.raw.messages[last user]",
-      summary: latestUserSummary,
+      title: latestLayerTitle,
+      path: input.trigger.path,
+      summary: input.trigger.preview,
       icon: UserRound,
       tone: "user",
       size: input.sizes.latest,
       badges: [
-        { label: "actual user input", tone: "blue" },
-        ...(input.latestUserBlock?.cache
-          ? [{ label: input.latestUserBlock.cache, tone: "violet" as const }]
+        latestLayerBadge,
+        ...(input.trigger.kind === "tool_result" && input.latestUserBlock
+          ? [{ label: "latest user input retained", tone: "blue" as const }]
+          : []),
+        ...(input.trigger.block?.cache
+          ? [{ label: input.trigger.block.cache, tone: "violet" as const }]
           : []),
       ],
-      raw: input.latestUserBlock?.raw ?? null,
-      cache: input.latestUserBlock?.cache ?? null,
+      raw: input.trigger.block?.raw ?? null,
+      cache: input.trigger.block?.cache ?? null,
     },
   ];
 }

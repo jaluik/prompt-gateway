@@ -1,6 +1,7 @@
 import type {
   ContentBlockAnalysis,
   MessageAnalysis,
+  RequestTrigger,
   ToolCallAnalysis,
   ToolDefinitionAnalysis,
 } from "../types";
@@ -87,9 +88,7 @@ export function extractSystemBlocks(rawSystem: unknown): ContentBlockAnalysis[] 
 
 export function extractMessages(rawMessages: unknown): MessageAnalysis[] {
   const rawMessageList = asArray(rawMessages);
-  const lastUserIndex = findLastUserIndex(rawMessageList);
-
-  return rawMessageList.map((message, index) => {
+  const messages = rawMessageList.map((message, index) => {
     const messageObject = asObject(message);
     const role = getStringField(messageObject, "role") ?? "unknown";
     const rawBlocks = normalizeContentBlocks(messageObject?.content);
@@ -114,24 +113,22 @@ export function extractMessages(rawMessages: unknown): MessageAnalysis[] {
       preview: previewSource ? previewSource.preview : MISSING,
       size: sizeOf(message),
       cacheCount: countCacheBlocks(message),
-      isLatestUser: index === lastUserIndex,
+      isLatestUserInput: false,
+      isRequestTrigger: false,
       hasSystemReminder: blocks.some((block) => block.isSystemReminder),
       hasThinking: blocks.some((block) => block.type === "thinking"),
       hasToolUse: blocks.some((block) => block.type === "tool_use"),
       hasToolResult: blocks.some((block) => block.type === "tool_result"),
     };
   });
-}
+  const latestUserBlock = findLatestUserBlock(messages);
+  const trigger = findRequestTrigger(messages);
 
-function findLastUserIndex(rawMessageList: unknown[]): number {
-  for (let index = rawMessageList.length - 1; index >= 0; index -= 1) {
-    const role = getStringField(asObject(rawMessageList[index]), "role");
-    if (role === "user") {
-      return index;
-    }
-  }
-
-  return -1;
+  return messages.map((message) => ({
+    ...message,
+    isLatestUserInput: message.blocks.some((block) => block.path === latestUserBlock?.path),
+    isRequestTrigger: message.blocks.some((block) => block.path === trigger.block?.path),
+  }));
 }
 
 function normalizeContentBlocks(content: unknown): unknown[] {
@@ -213,9 +210,7 @@ export function findLatestUserBlock(messages: MessageAnalysis[]): ContentBlockAn
     const userBlock =
       [...message.blocks]
         .reverse()
-        .find((block) => block.type === "text" && !block.isSystemReminder) ??
-      [...message.blocks].reverse().find((block) => !block.isSystemReminder) ??
-      message.blocks[message.blocks.length - 1] ??
+        .find((block) => block.type === "text" && !block.isSystemReminder && block.text.trim()) ??
       null;
     if (userBlock) {
       return userBlock;
@@ -223,6 +218,62 @@ export function findLatestUserBlock(messages: MessageAnalysis[]): ContentBlockAn
   }
 
   return null;
+}
+
+export function findRequestTrigger(messages: MessageAnalysis[]): RequestTrigger {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "user") {
+      continue;
+    }
+
+    const block =
+      [...message.blocks].reverse().find((item) => !item.isSystemReminder && item.text.trim()) ??
+      null;
+    if (!block) {
+      continue;
+    }
+
+    if (block.type === "tool_result") {
+      return {
+        kind: "tool_result",
+        label: "工具结果",
+        preview: block.preview,
+        path: block.path,
+        block,
+        messageIndex: message.index,
+      };
+    }
+
+    if (block.type === "text") {
+      return {
+        kind: "user_input",
+        label: "用户输入",
+        preview: block.preview,
+        path: block.path,
+        block,
+        messageIndex: message.index,
+      };
+    }
+
+    return {
+      kind: "unknown",
+      label: block.type,
+      preview: block.preview,
+      path: block.path,
+      block,
+      messageIndex: message.index,
+    };
+  }
+
+  return {
+    kind: "unknown",
+    label: "未知触发",
+    preview: MISSING,
+    path: "requestBody.raw.messages[last user]",
+    block: null,
+    messageIndex: null,
+  };
 }
 
 export function extractThinkingType(rawThinking: unknown): string {

@@ -2,7 +2,7 @@ import { Copy, PanelRight, PanelRightOpen, Terminal } from "lucide-react";
 
 import { Badge, Button, EmptyState, IconButton, Sparkline } from "../../components/ui";
 import { MISSING } from "../../lib/constants";
-import { badgeToneForLabel, formatDate } from "../../lib/format";
+import { formatDate } from "../../lib/format";
 import { encodeSessionRouteId, navigate } from "../../lib/routing";
 import type { SessionAnalytics, SessionListItem } from "../../types";
 
@@ -97,11 +97,17 @@ export function SessionPreview({
               >
                 <span className="request-index">{analysis.index + 1}</span>
                 <span className="truncate">
-                  {analysis.latestUserBlock?.preview ?? analysis.capture.derived.promptTextPreview}
+                  {analysis.trigger.preview || analysis.capture.derived.promptTextPreview}
                 </span>
                 <Badge
-                  label={analysis.diff.badges[0] ?? "request"}
-                  tone={badgeToneForLabel(analysis.diff.badges[0] ?? "")}
+                  label={analysis.trigger.label}
+                  tone={
+                    analysis.trigger.kind === "tool_result"
+                      ? "amber"
+                      : analysis.trigger.kind === "user_input"
+                        ? "blue"
+                        : undefined
+                  }
                 />
               </button>
             ))}

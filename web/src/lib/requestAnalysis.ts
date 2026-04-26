@@ -8,6 +8,7 @@ import {
   extractToolCalls,
   extractTools,
   findLatestUserBlock,
+  findRequestTrigger,
 } from "./contentAnalysis";
 import { buildDiff } from "./diffAnalysis";
 import { asObject, countCacheBlocks, getString, sizeOf } from "./json";
@@ -25,6 +26,7 @@ export function analyzeCapture(
   const tools = extractTools(raw.tools, previousRaw?.tools);
   const toolCalls = extractToolCalls(messages, index);
   const latestUserBlock = findLatestUserBlock(messages);
+  const trigger = findRequestTrigger(messages);
   const metadata = raw.metadata;
   const requestMetadata = {
     model: raw.model,
@@ -39,7 +41,7 @@ export function analyzeCapture(
     system: sizeOf(raw.system),
     tools: sizeOf(raw.tools),
     messages: sizeOf(raw.messages),
-    latest: latestUserBlock ? sizeOf(latestUserBlock.text) : 0,
+    latest: trigger.block ? sizeOf(trigger.block.text) : 0,
     total: 0,
   };
   sizes.total = sizes.metadata + sizes.context + sizes.system + sizes.tools + sizes.messages;
@@ -75,6 +77,7 @@ export function analyzeCapture(
     tools,
     toolCalls,
     latestUserBlock,
+    trigger,
     layers: buildLayers({
       raw,
       sizes,
@@ -83,6 +86,7 @@ export function analyzeCapture(
       messages,
       toolCalls,
       latestUserBlock,
+      trigger,
       maxTokens,
       stream,
       thinkingType,
@@ -129,7 +133,8 @@ export function buildSessionAnalytics(captures: CaptureRecord[]): SessionAnalyti
     firstPrompt:
       firstAnalysis?.latestUserBlock?.preview ?? firstCapture?.derived.promptTextPreview ?? MISSING,
     latestPrompt:
-      latestAnalysis?.latestUserBlock?.preview ??
+      [...analyses].reverse().find((analysis) => analysis.latestUserBlock)?.latestUserBlock
+        ?.preview ??
       latestCapture?.derived.promptTextPreview ??
       MISSING,
     startAt: firstCapture?.capturedAt ?? null,

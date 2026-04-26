@@ -34,6 +34,11 @@ export function buildInspectorItems(selectedAnalysis: RequestAnalysis | null) {
   }
 
   for (const message of selectedAnalysis.messages) {
+    const messageDiff = message.isRequestTrigger
+      ? "trigger"
+      : message.isLatestUserInput
+        ? "latest user input"
+        : "included";
     items.set(message.path, {
       key: message.path,
       title: `message ${message.index + 1}`,
@@ -41,10 +46,16 @@ export function buildInspectorItems(selectedAnalysis: RequestAnalysis | null) {
       type: message.role,
       size: message.size,
       cache: message.cacheCount > 0 ? `${message.cacheCount} cache hints` : null,
-      diff: message.isLatestUser ? "latest" : "included",
+      diff: messageDiff,
       content: selectedAnalysis.raw.messages,
     });
     for (const block of message.blocks) {
+      const blockDiff =
+        block.path === selectedAnalysis.trigger.path
+          ? "trigger"
+          : block.path === selectedAnalysis.latestUserBlock?.path
+            ? "latest user input"
+            : "included";
       items.set(block.path, {
         key: block.path,
         title: block.title,
@@ -52,7 +63,7 @@ export function buildInspectorItems(selectedAnalysis: RequestAnalysis | null) {
         type: block.type,
         size: block.size,
         cache: block.cache,
-        diff: message.isLatestUser ? "latest" : "included",
+        diff: blockDiff,
         content: block.raw,
       });
     }

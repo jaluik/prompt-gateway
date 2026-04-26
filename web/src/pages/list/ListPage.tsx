@@ -191,6 +191,9 @@ function filterSessions({
         session.models.join(" "),
         analytics?.firstPrompt ?? "",
         analytics?.latestPrompt ?? "",
+        analytics?.analyses
+          .map((analysis) => `${analysis.trigger.label} ${analysis.trigger.preview}`)
+          .join(" ") ?? "",
         analytics?.toolNames.join(" ") ?? "",
         analytics?.captures.map((capture) => capture.requestId).join(" ") ?? "",
       ]

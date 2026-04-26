@@ -79,7 +79,8 @@ export type MessageAnalysis = {
   preview: string;
   size: number;
   cacheCount: number;
-  isLatestUser: boolean;
+  isLatestUserInput: boolean;
+  isRequestTrigger: boolean;
   hasSystemReminder: boolean;
   hasThinking: boolean;
   hasToolUse: boolean;
@@ -109,6 +110,17 @@ export type ToolCallAnalysis = {
   resultSummary: string;
   linkedMessage: string;
   raw: unknown;
+};
+
+export type RequestTriggerKind = "user_input" | "tool_result" | "unknown";
+
+export type RequestTrigger = {
+  kind: RequestTriggerKind;
+  label: string;
+  preview: string;
+  path: string;
+  block: ContentBlockAnalysis | null;
+  messageIndex: number | null;
 };
 
 export type LayerKey = "metadata" | "context" | "system" | "tools" | "messages" | "latest";
@@ -163,6 +175,7 @@ export type RequestAnalysis = {
   tools: ToolDefinitionAnalysis[];
   toolCalls: ToolCallAnalysis[];
   latestUserBlock: ContentBlockAnalysis | null;
+  trigger: RequestTrigger;
   layers: StackLayer[];
   diff: DiffAnalysis;
   sizes: {

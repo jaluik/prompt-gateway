@@ -2,7 +2,7 @@ import { ChevronDown, Diff, GitBranch, Wrench } from "lucide-react";
 
 import { Badge, IconButton } from "../../components/ui";
 import { badgeToneForLabel, formatCompactNumber, formatTime } from "../../lib/format";
-import type { RequestAnalysis } from "../../types";
+import type { BadgeTone, RequestAnalysis } from "../../types";
 
 export function TimelinePanel({
   analyses,
@@ -63,8 +63,12 @@ export function TimelinePanel({
             <span className="timeline-node">{analysis.index + 1}</span>
             <span className="timeline-content">
               <span className="timeline-main">
+                <Badge
+                  label={analysis.trigger.label}
+                  tone={triggerBadgeTone(analysis.trigger.kind)}
+                />
                 <span className="timeline-prompt truncate">
-                  {analysis.latestUserBlock?.preview ?? analysis.capture.derived.promptTextPreview}
+                  {analysis.trigger.preview || analysis.capture.derived.promptTextPreview}
                 </span>
                 <span className="timeline-time">{formatTime(analysis.capture.capturedAt)}</span>
               </span>
@@ -80,4 +84,16 @@ export function TimelinePanel({
       </div>
     </aside>
   );
+}
+
+function triggerBadgeTone(kind: RequestAnalysis["trigger"]["kind"]): BadgeTone | undefined {
+  if (kind === "user_input") {
+    return "blue";
+  }
+
+  if (kind === "tool_result") {
+    return "amber";
+  }
+
+  return undefined;
 }

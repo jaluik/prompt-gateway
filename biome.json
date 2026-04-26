@@ -14,13 +14,6 @@
     }
   },
   "files": {
-    "includes": [
-      "**",
-      "!dist",
-      "!.test-dist",
-      "!node_modules",
-      "!.claude/prompt-gateway",
-      "!web/docs"
-    ]
+    "includes": ["**", "!dist", "!.test-dist", "!node_modules", "!.claude", "!web/docs"]
   }
 }
