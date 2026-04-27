@@ -24,6 +24,11 @@ interface CliOverrides {
 
 type ClaudeSettingsEnv = Partial<Record<"ANTHROPIC_BASE_URL" | "ANTHROPIC_API_URL", string>>;
 
+interface GeneratedClaudeSettings {
+  path: string;
+  cleanup: () => Promise<void>;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -293,25 +298,39 @@ function shouldInjectClaudeSettings(claudeCommand: string): boolean {
   return path.basename(claudeCommand).toLowerCase().includes("claude");
 }
 
-function getGatewayClaudeArgs(
-  claudeCommand: string,
-  claudeArgs: string[],
-  gatewayUrl: string,
-): string[] {
-  if (!shouldInjectClaudeSettings(claudeCommand)) {
-    return claudeArgs;
-  }
+async function createGatewayClaudeSettings(gatewayUrl: string): Promise<GeneratedClaudeSettings> {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "prompt-gateway-claude-settings-"));
+  const settingsPath = path.join(tempDir, "settings.json");
 
-  return [
-    "--settings",
+  await fs.writeFile(
+    settingsPath,
     JSON.stringify({
       env: {
         ANTHROPIC_BASE_URL: gatewayUrl,
         ANTHROPIC_API_URL: gatewayUrl,
       },
     }),
-    ...claudeArgs,
-  ];
+    "utf8",
+  );
+
+  return {
+    path: settingsPath,
+    cleanup: async () => {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    },
+  };
+}
+
+function getGatewayClaudeArgs(
+  claudeCommand: string,
+  claudeArgs: string[],
+  settingsPath?: string,
+): string[] {
+  if (!shouldInjectClaudeSettings(claudeCommand) || !settingsPath) {
+    return claudeArgs;
+  }
+
+  return ["--settings", settingsPath, ...claudeArgs];
 }
 
 async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise<void> {
@@ -357,14 +376,6 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
 
   delete childEnv.ANTHROPIC_API_URL;
 
-  const claudeCommand = getClaudeCommand(overrides);
-  const childArgs = getGatewayClaudeArgs(claudeCommand, claudeArgs, address.url);
-  const child = spawn(claudeCommand, childArgs, {
-    stdio: "inherit",
-    env: childEnv,
-    shell: process.platform === "win32",
-  });
-
   const cleanup = async (): Promise<void> => {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
@@ -377,14 +388,28 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
     });
   };
 
-  const forwardSignal = (signal: NodeJS.Signals): void => {
-    child.kill(signal);
-  };
-
-  process.on("SIGINT", forwardSignal);
-  process.on("SIGTERM", forwardSignal);
+  let generatedSettings: GeneratedClaudeSettings | undefined;
+  let signalForwarder: ((signal: NodeJS.Signals) => void) | undefined;
 
   try {
+    const claudeCommand = getClaudeCommand(overrides);
+    generatedSettings = shouldInjectClaudeSettings(claudeCommand)
+      ? await createGatewayClaudeSettings(address.url)
+      : undefined;
+    const childArgs = getGatewayClaudeArgs(claudeCommand, claudeArgs, generatedSettings?.path);
+    const child = spawn(claudeCommand, childArgs, {
+      stdio: "inherit",
+      env: childEnv,
+      shell: process.platform === "win32",
+    });
+
+    signalForwarder = (signal: NodeJS.Signals): void => {
+      child.kill(signal);
+    };
+
+    process.on("SIGINT", signalForwarder);
+    process.on("SIGTERM", signalForwarder);
+
     const exitCode = await new Promise<number | null>((resolve, reject) => {
       child.on("error", reject);
       child.on("exit", (code) => resolve(code));
@@ -392,9 +417,12 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
 
     process.exitCode = exitCode ?? 1;
   } finally {
-    process.off("SIGINT", forwardSignal);
-    process.off("SIGTERM", forwardSignal);
+    if (signalForwarder) {
+      process.off("SIGINT", signalForwarder);
+      process.off("SIGTERM", signalForwarder);
+    }
     await cleanup();
+    await generatedSettings?.cleanup();
   }
 }
 
