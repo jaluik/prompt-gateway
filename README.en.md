@@ -56,7 +56,7 @@ The local web UI groups captures by Claude Code session and makes high-signal re
 
 ![Session list showing request counts, max context size, model filters, and session preview](./docs/assets/readme/session-list.png)
 
-Open a session to see the full request timeline, context size, diff badges, model settings, tool counts, and the request body broken into logical layers.
+Open a session to see the full request timeline, context size, diff badges, model settings, tool counts, model response, and the request body broken into logical layers.
 
 ![Session detail showing request timeline, trigger badges, request metadata, and context stack](./docs/assets/readme/request-detail.png)
 

@@ -216,6 +216,6 @@ export type SessionAnalytics = {
 };
 
 export type BadgeTone = "blue" | "teal" | "amber" | "rose" | "violet";
-export type DetailView = "stack" | "messages" | "tools" | "raw";
+export type DetailView = "stack" | "messages" | "tools" | "response" | "raw";
 export type TimeFilter = "all" | "24h" | "7d";
 export type SortMode = "latest" | "context" | "requests";

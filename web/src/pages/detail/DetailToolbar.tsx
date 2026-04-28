@@ -8,6 +8,7 @@ const VIEWS: Array<[DetailView, string]> = [
   ["stack", "Context Stack"],
   ["messages", "Messages"],
   ["tools", "Tools"],
+  ["response", "Response"],
   ["raw", "Raw JSON"],
 ];
 

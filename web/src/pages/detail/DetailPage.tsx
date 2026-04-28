@@ -15,6 +15,7 @@ import { MessagesView } from "./MessagesView";
 import { OverviewGrid } from "./OverviewGrid";
 import { RawJsonView } from "./RawJsonView";
 import { RequestCallout } from "./RequestCallout";
+import { ResponseView } from "./ResponseView";
 import { SessionSummaryBar } from "./SessionSummaryBar";
 import { TimelinePanel } from "./TimelinePanel";
 import { ToolsView } from "./ToolsView";
@@ -136,6 +137,10 @@ function ActiveDetailView({
 
   if (activeView === "tools") {
     return <ToolsView analysis={analysis} onSelect={onInspectorKeyChange} />;
+  }
+
+  if (activeView === "response") {
+    return <ResponseView analysis={analysis} />;
   }
 
   if (activeView === "raw") {

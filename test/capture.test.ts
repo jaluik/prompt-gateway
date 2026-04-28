@@ -179,6 +179,8 @@ test("renderPromptCaptureHtml includes key fields", () => {
   assert.match(html, /session-123/);
   assert.match(html, /claude-sonnet/);
   assert.match(html, /hello/);
+  assert.match(html, /Response Body/);
+  assert.match(html, /hello back/);
 });
 
 test("writeCaptureArtifacts creates dated output files", async () => {

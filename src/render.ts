@@ -44,6 +44,7 @@ export function renderPromptCaptureHtml(
   const headersBody = `<pre>${renderJson(record.requestHeaders.redacted)}</pre>`;
   const previewBody = `<pre>${escapeHtml(record.derived.promptTextPreview || "(empty)")}</pre>`;
   const rawBody = `<details open><summary>Show raw JSON</summary><pre>${renderJson(record.requestBody.raw)}</pre></details>`;
+  const responseBody = `<details open><summary>Show raw response body</summary><pre>${renderJson(record.response.body.raw)}</pre></details>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -142,6 +143,7 @@ export function renderPromptCaptureHtml(
         ${renderSection("System", systemBody)}
         ${renderSection("Messages", messagesBody)}
         ${renderSection("Headers", headersBody)}
+        ${renderSection("Response Body", responseBody)}
         ${renderSection("Raw Request", rawBody)}
       </div>
     </main>
