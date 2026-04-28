@@ -39,9 +39,11 @@ http://127.0.0.1:8787/
 捕获文件默认保存到：
 
 ```text
-.claude/prompt-gateway/captures/YYYY-MM-DD/*.json
-.claude/prompt-gateway/html/YYYY-MM-DD/*.html
+.claude/prompt-gateway/captures/sessions/<session-id>/*.json
+.claude/prompt-gateway/html/sessions/<session-id>/*.html
 ```
+
+新文件会按 Claude Code session 分目录保存；文件名包含本地时区时间、session、响应状态、模型和 request id，便于在 Finder 或终端里直接定位。
 
 也可以全局安装：
 
@@ -148,7 +150,7 @@ CLI 选项：
 | `--api-key <value>` | environment | 上游 API key。 |
 | `--api-version <value>` | environment | `anthropic-version` 请求头。 |
 | `--html-title <value>` | `Prompt Gateway` | 本地网页标题。 |
-| `--timezone <value>` | local/default | 页面展示用时区标签。 |
+| `--timezone <value>` | local/default | 用于捕获文件名的 IANA 时区，例如 `Asia/Shanghai`。 |
 | `--claude-command <value>` | `claude` | Claude Code 可执行文件。 |
 | `--no-html` | off | 不写单条 HTML 捕获文件。 |
 | `--no-json` | off | 不写 JSON 捕获文件。 |
@@ -163,7 +165,7 @@ CLI 选项：
 | `PROMPT_GATEWAY_WRITE_JSON` | 开启/关闭 JSON 捕获写入。 |
 | `PROMPT_GATEWAY_WRITE_HTML` | 开启/关闭 HTML 捕获写入。 |
 | `PROMPT_GATEWAY_HTML_TITLE` | 本地网页标题。 |
-| `PROMPT_GATEWAY_TIMEZONE` | 页面展示用时区标签。 |
+| `PROMPT_GATEWAY_TIMEZONE` | 用于捕获文件名的 IANA 时区。 |
 | `PROMPT_GATEWAY_UPSTREAM_URL` | 真实上游 base URL。 |
 | `PROMPT_GATEWAY_UPSTREAM_API_KEY` | 真实上游 API key。 |
 | `PROMPT_GATEWAY_UPSTREAM_API_VERSION` | 上游 Anthropic API version。 |

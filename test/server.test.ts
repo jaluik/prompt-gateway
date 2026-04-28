@@ -56,26 +56,20 @@ test("gateway proxies a JSON messages request and writes artifacts", async () =>
     assert.equal(json.id, "msg_123");
     assert.match(upstreamRequestBody, /hello proxy/);
 
-    const captureRoot = path.join(tempRoot, "captures");
-    const captureDays = await waitForEntries(() => fs.readdir(captureRoot), "capture day");
-    const captureDay = onlyEntry(captureDays, "capture day");
-    const captureFiles = await waitForEntries(
-      () => fs.readdir(path.join(captureRoot, captureDay)),
-      "capture file",
-    );
+    const captureDir = path.join(tempRoot, "captures", "sessions", "session-abc");
+    const captureFiles = await waitForEntries(() => fs.readdir(captureDir), "capture file");
     const captureFile = onlyEntry(captureFiles, "capture file");
-    const capture = JSON.parse(
-      await fs.readFile(path.join(captureRoot, captureDay, captureFile), "utf8"),
-    );
+    assert.match(captureFile, /__session-abc__200__claude-sonnet-4-5__req-/);
+    const capture = JSON.parse(await fs.readFile(path.join(captureDir, captureFile), "utf8"));
 
     assert.equal(capture.sessionId, "session-abc");
     assert.equal(capture.derived.model, "claude-sonnet-4-5");
     assert.equal(capture.response.body.raw.id, "msg_123");
     assert.equal(capture.response.body.raw.content[0].text, "ok");
 
-    const htmlRoot = path.join(tempRoot, "html");
-    const htmlDays = await waitForEntries(() => fs.readdir(htmlRoot), "html day");
-    assert.equal(htmlDays.length, 1);
+    const htmlDir = path.join(tempRoot, "html", "sessions", "session-abc");
+    const htmlFiles = await waitForEntries(() => fs.readdir(htmlDir), "html file");
+    assert.equal(htmlFiles.length, 1);
   } finally {
     await close(gatewayInfo.server);
     await close(upstreamInfo.server);
@@ -127,17 +121,10 @@ test("gateway streams upstream responses", async () => {
     const text = await response.text();
     assert.match(text, /\[DONE\]/);
 
-    const captureRoot = path.join(tempRoot, "captures");
-    const captureDays = await waitForEntries(() => fs.readdir(captureRoot), "capture day");
-    const captureDay = onlyEntry(captureDays, "capture day");
-    const captureFiles = await waitForEntries(
-      () => fs.readdir(path.join(captureRoot, captureDay)),
-      "capture file",
-    );
+    const captureDir = path.join(tempRoot, "captures", "sessions", "missing-session");
+    const captureFiles = await waitForEntries(() => fs.readdir(captureDir), "capture file");
     const captureFile = onlyEntry(captureFiles, "capture file");
-    const capture = JSON.parse(
-      await fs.readFile(path.join(captureRoot, captureDay, captureFile), "utf8"),
-    );
+    const capture = JSON.parse(await fs.readFile(path.join(captureDir, captureFile), "utf8"));
 
     assert.match(capture.response.body.raw, /"text":"hello "/);
     assert.match(capture.response.body.raw, /"text":"stream"/);
@@ -178,17 +165,10 @@ test("gateway records upstream failure responses", async () => {
     });
 
     assert.equal(response.status, 500);
-    const captureRoot = path.join(tempRoot, "captures");
-    const captureDays = await waitForEntries(() => fs.readdir(captureRoot), "capture day");
-    const captureDay = onlyEntry(captureDays, "capture day");
-    const captureFiles = await waitForEntries(
-      () => fs.readdir(path.join(captureRoot, captureDay)),
-      "capture file",
-    );
+    const captureDir = path.join(tempRoot, "captures", "sessions", "missing-session");
+    const captureFiles = await waitForEntries(() => fs.readdir(captureDir), "capture file");
     const captureFile = onlyEntry(captureFiles, "capture file");
-    const capture = JSON.parse(
-      await fs.readFile(path.join(captureRoot, captureDay, captureFile), "utf8"),
-    );
+    const capture = JSON.parse(await fs.readFile(path.join(captureDir, captureFile), "utf8"));
 
     assert.equal(capture.response.status, 500);
     assert.equal(capture.response.ok, false);

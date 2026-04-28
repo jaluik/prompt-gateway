@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 import {
   capturePromptRequest,
@@ -183,15 +185,15 @@ test("renderPromptCaptureHtml includes key fields", () => {
   assert.match(html, /hello back/);
 });
 
-test("writeCaptureArtifacts creates dated output files", async () => {
+test("writeCaptureArtifacts creates session-scoped local-time output files", async () => {
   const tempRoot = await createTempDir("prompt-gateway-capture");
   const record = capturePromptRequest(
     {
       method: "POST",
       path: "/v1/messages",
-      sessionId: null,
+      sessionId: "session/test value",
       redactedHeaders: {},
-      body: { messages: [] },
+      body: { model: "claude/sonnet 4.5", messages: [] },
     },
     {
       status: 200,
@@ -200,18 +202,27 @@ test("writeCaptureArtifacts creates dated output files", async () => {
       body: null,
     },
   );
+  record.timestampMs = Date.parse("2026-04-20T00:00:00.000Z");
+  record.capturedAt = "2026-04-20T00:00:00.000Z";
 
   const html = renderPromptCaptureHtml(record);
   const result = await writeCaptureArtifacts(record, html, {
     outputRoot: tempRoot,
     writeJson: true,
     writeHtml: true,
+    timezone: "Asia/Shanghai",
   });
 
   assert.ok(result.jsonPath);
   assert.ok(result.htmlPath);
-  assert.match(onlyEntry([result.jsonPath], "json path"), /captures\/\d{4}-\d{2}-\d{2}\//);
-  assert.match(onlyEntry([result.htmlPath], "html path"), /html\/\d{4}-\d{2}-\d{2}\//);
+  assert.match(
+    onlyEntry([result.jsonPath], "json path"),
+    /captures\/sessions\/session-test-value\/2026-04-20_08-00-00__session-test-value__200__claude-sonnet-4.5__req-[a-zA-Z0-9._-]+\.json$/,
+  );
+  assert.match(
+    onlyEntry([result.htmlPath], "html path"),
+    /html\/sessions\/session-test-value\/2026-04-20_08-00-00__session-test-value__200__claude-sonnet-4.5__req-[a-zA-Z0-9._-]+\.html$/,
+  );
 });
 
 test("capture helpers list and resolve saved prompt captures", async () => {
@@ -276,6 +287,41 @@ test("capture helpers list and resolve saved prompt captures", async () => {
   const resolved = await getPromptCaptureById(tempRoot, first.requestId);
   assert.equal(resolved?.requestId, first.requestId);
   assert.match(resolved?.derived.promptTextPreview || "", /first prompt/);
+});
+
+test("capture helpers read legacy dated capture directories", async () => {
+  const tempRoot = await createTempDir("prompt-gateway-legacy-captures");
+  const record = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "legacy-session",
+      redactedHeaders: {},
+      body: {
+        model: "claude-legacy",
+        messages: [{ role: "user", content: "legacy prompt" }],
+      },
+    },
+    {
+      status: 200,
+      durationMs: 5,
+      ok: true,
+      body: null,
+    },
+  );
+  record.timestampMs = Date.parse("2026-04-19T20:00:00.000Z");
+  record.capturedAt = "2026-04-19T20:00:00.000Z";
+
+  const legacyDir = path.join(tempRoot, "captures", "2026-04-19");
+  await fs.mkdir(legacyDir, { recursive: true });
+  await fs.writeFile(path.join(legacyDir, `${record.requestId}.json`), JSON.stringify(record));
+
+  const captures = await listPromptCaptures(tempRoot);
+  assert.equal(captures.length, 1);
+  assert.equal(captures[0]?.requestId, record.requestId);
+
+  const resolved = await getPromptCaptureById(tempRoot, record.requestId);
+  assert.equal(resolved?.sessionId, "legacy-session");
 });
 
 test("capture helpers group saved captures by Claude Code session", async () => {

@@ -201,36 +201,96 @@ export function capturePromptRequest(
   };
 }
 
-function formatDay(date: Date): string {
-  return date.toISOString().slice(0, 10);
+const SESSION_CAPTURE_DIR = "sessions";
+const MISSING_SESSION_SLUG = "missing-session";
+
+function getValidTimeZone(timezone?: string): string | undefined {
+  const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const candidate = timezone || fallback;
+
+  if (!candidate) {
+    return undefined;
+  }
+
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format(new Date(0));
+    return candidate;
+  } catch {
+    return fallback;
+  }
 }
 
-function formatTimestampForFile(date: Date): string {
-  return date.toISOString().replace(/[:.]/g, "-");
+function formatLocalTimestampForFile(timestampMs: number, timezone?: string): string {
+  const validTimeZone = getValidTimeZone(timezone);
+  const options: Intl.DateTimeFormatOptions = {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  };
+
+  if (validTimeZone) {
+    options.timeZone = validTimeZone;
+  }
+
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", options)
+      .formatToParts(new Date(timestampMs))
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+
+  return `${parts.year}-${parts.month}-${parts.day}_${parts.hour}-${parts.minute}-${parts.second}`;
+}
+
+function slugifyFilePart(
+  value: string | null | undefined,
+  fallback: string,
+  maxLength = 80,
+): string {
+  const normalized = (value ?? "").trim().replace(/[^a-zA-Z0-9._-]+/g, "-");
+  const compact = normalized.replace(/-+/g, "-").replace(/^-|-$/g, "");
+  const slug = compact || fallback;
+  return slug.length > maxLength ? slug.slice(0, maxLength).replace(/-$/g, "") : slug;
+}
+
+function getSessionSlug(sessionId: string | null): string {
+  return slugifyFilePart(sessionId, MISSING_SESSION_SLUG, 80);
+}
+
+function getArtifactBaseName(record: PromptCaptureRecord, timezone?: string): string {
+  const stamp = formatLocalTimestampForFile(record.timestampMs, timezone);
+  const sessionSlug = getSessionSlug(record.sessionId);
+  const status = String(record.response.status);
+  const modelSlug = slugifyFilePart(record.derived.model, "unknown-model", 80);
+  const requestSlug = slugifyFilePart(record.requestId, "unknown-request", 32).slice(0, 12);
+
+  return `${stamp}__${sessionSlug}__${status}__${modelSlug}__req-${requestSlug}`;
 }
 
 export async function writeCaptureArtifacts(
   record: PromptCaptureRecord,
   html: string,
-  config: Pick<PromptGatewayConfig, "outputRoot" | "writeJson" | "writeHtml">,
+  config: Pick<PromptGatewayConfig, "outputRoot" | "writeJson" | "writeHtml" | "timezone">,
 ): Promise<{ jsonPath?: string; htmlPath?: string }> {
-  const date = new Date(record.timestampMs);
-  const day = formatDay(date);
-  const stamp = formatTimestampForFile(date);
-  const baseName = `${stamp}-${record.requestId}`;
+  const sessionSlug = getSessionSlug(record.sessionId);
+  const baseName = getArtifactBaseName(record, config.timezone);
 
   let jsonPath: string | undefined;
   let htmlPath: string | undefined;
 
   if (config.writeJson) {
-    const captureDir = path.join(config.outputRoot, "captures", day);
+    const captureDir = path.join(config.outputRoot, "captures", SESSION_CAPTURE_DIR, sessionSlug);
     jsonPath = path.join(captureDir, `${baseName}.json`);
     await fs.mkdir(captureDir, { recursive: true });
     await fs.writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   }
 
   if (config.writeHtml) {
-    const htmlDir = path.join(config.outputRoot, "html", day);
+    const htmlDir = path.join(config.outputRoot, "html", SESSION_CAPTURE_DIR, sessionSlug);
     htmlPath = path.join(htmlDir, `${baseName}.html`);
     await fs.mkdir(htmlDir, { recursive: true });
     await fs.writeFile(htmlPath, html, "utf8");
@@ -255,9 +315,9 @@ function toListItem(record: PromptCaptureRecord): PromptCaptureListItem {
   };
 }
 
-async function listDayDirectories(capturesRoot: string): Promise<string[]> {
+async function listDirectories(root: string): Promise<string[]> {
   try {
-    const entries = await fs.readdir(capturesRoot, { withFileTypes: true });
+    const entries = await fs.readdir(root, { withFileTypes: true });
     return entries
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
@@ -270,6 +330,43 @@ async function listDayDirectories(capturesRoot: string): Promise<string[]> {
 
     throw error;
   }
+}
+
+async function listJsonFiles(root: string): Promise<string[]> {
+  try {
+    const files = await fs.readdir(root);
+    return files
+      .filter((file) => file.endsWith(".json"))
+      .sort()
+      .reverse()
+      .map((file) => path.join(root, file));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+async function listCaptureFilePaths(outputRoot: string): Promise<string[]> {
+  const capturesRoot = path.join(outputRoot, "captures");
+  const sessionRoot = path.join(capturesRoot, SESSION_CAPTURE_DIR);
+  const sessionDirs = await listDirectories(sessionRoot);
+  const paths: string[] = [];
+
+  for (const sessionDir of sessionDirs) {
+    paths.push(...(await listJsonFiles(path.join(sessionRoot, sessionDir))));
+  }
+
+  const legacyDayDirs = (await listDirectories(capturesRoot)).filter((dir) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(dir),
+  );
+  for (const dayDir of legacyDayDirs) {
+    paths.push(...(await listJsonFiles(path.join(capturesRoot, dayDir))));
+  }
+
+  return paths;
 }
 
 async function readCaptureFile(filePath: string): Promise<PromptCaptureRecord | null> {
@@ -287,22 +384,13 @@ export async function listPromptCaptures(outputRoot: string): Promise<PromptCapt
 }
 
 async function listPromptCaptureRecords(outputRoot: string): Promise<PromptCaptureRecord[]> {
-  const capturesRoot = path.join(outputRoot, "captures");
-  const days = await listDayDirectories(capturesRoot);
+  const files = await listCaptureFilePaths(outputRoot);
   const records: PromptCaptureRecord[] = [];
 
-  for (const day of days) {
-    const dayDir = path.join(capturesRoot, day);
-    const files = (await fs.readdir(dayDir))
-      .filter((file) => file.endsWith(".json"))
-      .sort()
-      .reverse();
-
-    for (const file of files) {
-      const record = await readCaptureFile(path.join(dayDir, file));
-      if (record) {
-        records.push(record);
-      }
+  for (const file of files) {
+    const record = await readCaptureFile(file);
+    if (record) {
+      records.push(record);
     }
   }
 
@@ -362,22 +450,12 @@ export async function getPromptCaptureById(
   outputRoot: string,
   requestId: string,
 ): Promise<PromptCaptureRecord | null> {
-  const capturesRoot = path.join(outputRoot, "captures");
-  const days = await listDayDirectories(capturesRoot);
+  const files = await listCaptureFilePaths(outputRoot);
 
-  for (const day of days) {
-    const dayDir = path.join(capturesRoot, day);
-    const files = await fs.readdir(dayDir);
-
-    for (const file of files) {
-      if (!file.endsWith(".json")) {
-        continue;
-      }
-
-      const record = await readCaptureFile(path.join(dayDir, file));
-      if (record?.requestId === requestId) {
-        return record;
-      }
+  for (const file of files) {
+    const record = await readCaptureFile(file);
+    if (record?.requestId === requestId) {
+      return record;
     }
   }
 

@@ -39,9 +39,11 @@ http://127.0.0.1:8787/
 Captured files are saved under:
 
 ```text
-.claude/prompt-gateway/captures/YYYY-MM-DD/*.json
-.claude/prompt-gateway/html/YYYY-MM-DD/*.html
+.claude/prompt-gateway/captures/sessions/<session-id>/*.json
+.claude/prompt-gateway/html/sessions/<session-id>/*.html
 ```
+
+New files are grouped by Claude Code session. Filenames include local-time timestamp, session, response status, model, and request id so they are easier to identify in Finder or a terminal.
 
 Install globally if you prefer:
 
@@ -148,7 +150,7 @@ CLI options:
 | `--api-key <value>` | environment | Upstream API key. |
 | `--api-version <value>` | environment | `anthropic-version` request header. |
 | `--html-title <value>` | `Prompt Gateway` | Browser/page title. |
-| `--timezone <value>` | local/default | Display timezone label. |
+| `--timezone <value>` | local/default | IANA timezone for capture filenames, for example `Asia/Shanghai`. |
 | `--claude-command <value>` | `claude` | Claude Code executable. |
 | `--no-html` | off | Do not write per-capture HTML files. |
 | `--no-json` | off | Do not write JSON capture files. |
@@ -163,7 +165,7 @@ Environment variables:
 | `PROMPT_GATEWAY_WRITE_JSON` | Enable/disable JSON capture writing. |
 | `PROMPT_GATEWAY_WRITE_HTML` | Enable/disable HTML capture writing. |
 | `PROMPT_GATEWAY_HTML_TITLE` | Browser/page title. |
-| `PROMPT_GATEWAY_TIMEZONE` | Display timezone label. |
+| `PROMPT_GATEWAY_TIMEZONE` | IANA timezone for capture filenames. |
 | `PROMPT_GATEWAY_UPSTREAM_URL` | Real upstream base URL. |
 | `PROMPT_GATEWAY_UPSTREAM_API_KEY` | Real upstream API key. |
 | `PROMPT_GATEWAY_UPSTREAM_API_VERSION` | Upstream Anthropic API version. |
