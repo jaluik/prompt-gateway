@@ -29,6 +29,22 @@ interface GeneratedClaudeSettings {
   cleanup: () => Promise<void>;
 }
 
+const KNOWN_OPTIONS = new Set([
+  "--help",
+  "-h",
+  "--host",
+  "--port",
+  "--output",
+  "--upstream-url",
+  "--api-key",
+  "--api-version",
+  "--html-title",
+  "--timezone",
+  "--claude-command",
+  "--no-html",
+  "--no-json",
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -37,7 +53,35 @@ function parseBoolean(value: string | undefined, defaultValue: boolean): boolean
   if (typeof value === "undefined") {
     return defaultValue;
   }
-  return !["0", "false", "no", "off"].includes(value.toLowerCase());
+  return !["0", "false", "no", "off"].includes(value.trim().toLowerCase());
+}
+
+function parsePort(value: string | undefined, source: string): number {
+  const normalized = value?.trim();
+  if (!normalized) {
+    throw new Error(`${source} requires a port value`);
+  }
+
+  const port = Number(normalized);
+  if (!/^\d+$/.test(normalized) || port > 65535) {
+    throw new Error(`${source} must be an integer from 0 to 65535`);
+  }
+
+  return port;
+}
+
+function getOptionValue(argv: string[], index: number, option: string): string {
+  const value = argv[index + 1];
+  if (
+    typeof value === "undefined" ||
+    value === "--" ||
+    value.startsWith("--") ||
+    KNOWN_OPTIONS.has(value)
+  ) {
+    throw new Error(`${option} requires a value`);
+  }
+
+  return value;
 }
 
 function showHelp(): void {
@@ -74,10 +118,8 @@ function parseArgs(argv: string[]): CliOverrides {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--") {
-      continue;
+      break;
     }
-
-    const next = argv[index + 1];
 
     switch (arg) {
       case "--help":
@@ -86,41 +128,39 @@ function parseArgs(argv: string[]): CliOverrides {
         process.exit(0);
         return overrides;
       case "--host":
-        overrides.host = next;
+        overrides.host = getOptionValue(argv, index, arg);
         index += 1;
         break;
       case "--port":
-        if (next) {
-          overrides.port = Number.parseInt(next, 10);
-        }
+        overrides.port = parsePort(getOptionValue(argv, index, arg), arg);
         index += 1;
         break;
       case "--output":
-        overrides.outputRoot = next ? path.resolve(next) : undefined;
+        overrides.outputRoot = path.resolve(getOptionValue(argv, index, arg));
         index += 1;
         break;
       case "--upstream-url":
-        overrides.upstreamBaseUrl = next;
+        overrides.upstreamBaseUrl = getOptionValue(argv, index, arg);
         index += 1;
         break;
       case "--api-key":
-        overrides.upstreamApiKey = next;
+        overrides.upstreamApiKey = getOptionValue(argv, index, arg);
         index += 1;
         break;
       case "--api-version":
-        overrides.upstreamApiVersion = next;
+        overrides.upstreamApiVersion = getOptionValue(argv, index, arg);
         index += 1;
         break;
       case "--html-title":
-        overrides.htmlTitle = next;
+        overrides.htmlTitle = getOptionValue(argv, index, arg);
         index += 1;
         break;
       case "--timezone":
-        overrides.timezone = next;
+        overrides.timezone = getOptionValue(argv, index, arg);
         index += 1;
         break;
       case "--claude-command":
-        overrides.claudeCommand = next;
+        overrides.claudeCommand = getOptionValue(argv, index, arg);
         index += 1;
         break;
       case "--no-html":
@@ -140,7 +180,8 @@ function parseArgs(argv: string[]): CliOverrides {
 function getConfig(overrides: CliOverrides): PromptGatewayConfig {
   return {
     host: overrides.host || process.env.PROMPT_GATEWAY_HOST || "127.0.0.1",
-    port: overrides.port || Number.parseInt(process.env.PROMPT_GATEWAY_PORT || "8787", 10),
+    port:
+      overrides.port ?? parsePort(process.env.PROMPT_GATEWAY_PORT || "8787", "PROMPT_GATEWAY_PORT"),
     outputRoot:
       overrides.outputRoot ||
       path.resolve(process.env.PROMPT_GATEWAY_OUTPUT_ROOT || ".claude/prompt-gateway"),
@@ -348,7 +389,6 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
   const upstreamBaseUrl = getWrappedUpstreamBaseUrl(process.env, overrides, claudeSettingsEnv);
   const config = getConfig({
     ...overrides,
-    port: overrides.port ?? 0,
     upstreamBaseUrl,
   });
 

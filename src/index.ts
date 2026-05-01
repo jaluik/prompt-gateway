@@ -2,6 +2,8 @@ export {
   capturePromptRequest,
   getPromptCaptureById,
   listPromptCaptures,
+  listPromptCapturesBySessionId,
+  listPromptSessions,
   redactHeaders,
   writeCaptureArtifacts,
 } from "./capture.js";
@@ -13,6 +15,7 @@ export type {
   PromptCaptureListItem,
   PromptCaptureRecord,
   PromptGatewayConfig,
+  PromptSessionListItem,
   RedactedHeaders,
   RenderPromptHtmlOptions,
   UpstreamConfig,

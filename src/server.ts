@@ -135,28 +135,56 @@ function writeJson(res: http.ServerResponse, payload: unknown, statusCode = 200)
   res.end(JSON.stringify(payload));
 }
 
+function writeError(res: http.ServerResponse, error: string, statusCode: number): void {
+  writeJson(res, { error }, statusCode);
+}
+
 function getContentType(filePath: string): string {
   return CONTENT_TYPES[path.extname(filePath).toLowerCase()] || "application/octet-stream";
 }
 
-function sanitizeAssetPath(requestPath: string): string | null {
+function resolveWebAssetPath(requestPath: string): string | null {
   const normalized = path.posix.normalize(requestPath);
-  if (normalized.includes("..")) {
+  if (requestPath.startsWith("/assets/") && !normalized.startsWith("/assets/")) {
     return null;
   }
 
-  return normalized.replace(/^\/+/, "");
+  const assetPath = normalized.replace(/^\/+/, "");
+  if (!assetPath) {
+    return null;
+  }
+
+  const resolvedPath = path.resolve(WEB_DIST_DIR, assetPath);
+  const relativePath = path.relative(WEB_DIST_DIR, resolvedPath);
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    return null;
+  }
+
+  return resolvedPath;
 }
 
-async function readWebAsset(assetPath: string): Promise<Buffer | null> {
+async function readWebAsset(requestPath: string): Promise<Buffer | null> {
+  const assetPath = resolveWebAssetPath(requestPath);
+  if (!assetPath) {
+    return null;
+  }
+
   try {
-    return await fs.readFile(path.join(WEB_DIST_DIR, assetPath));
+    return await fs.readFile(assetPath);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (["EISDIR", "ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code || "")) {
       return null;
     }
 
     throw error;
+  }
+}
+
+function decodePathSegment(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
   }
 }
 
@@ -170,20 +198,14 @@ async function serveWebApp(
   }
 
   if (requestPath.startsWith("/assets/") || requestPath === "/favicon.ico") {
-    const assetPath = sanitizeAssetPath(requestPath);
-    if (!assetPath) {
-      writeJson(res, { error: "Invalid asset path" }, 400);
-      return true;
-    }
-
-    const file = await readWebAsset(assetPath);
+    const file = await readWebAsset(requestPath);
     if (!file) {
-      writeJson(res, { error: "Asset not found" }, 404);
+      writeError(res, "Asset not found", 404);
       return true;
     }
 
     res.statusCode = 200;
-    res.setHeader("content-type", getContentType(assetPath));
+    res.setHeader("content-type", getContentType(requestPath));
     res.end(file);
     return true;
   }
@@ -204,121 +226,176 @@ async function serveWebApp(
 }
 
 export function createGatewayServer(config: PromptGatewayConfig): http.Server {
-  return http.createServer(async (req, res) => {
-    const requestPath = getRequestPathname(req.url);
+  return http.createServer((req, res) => {
+    void handleGatewayRequest(req, res, config).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`[prompt-gateway] request failed: ${message}\n`);
 
-    if (req.method === "GET" && requestPath === "/api/captures") {
-      const captures = await listPromptCaptures(config.outputRoot);
-      writeJson(res, { captures });
-      return;
-    }
-
-    if (req.method === "GET" && requestPath === "/api/sessions") {
-      const sessions = await listPromptSessions(config.outputRoot);
-      writeJson(res, { sessions });
-      return;
-    }
-
-    if (req.method === "GET" && requestPath.startsWith("/api/sessions/")) {
-      const encodedSessionId = requestPath.slice("/api/sessions/".length);
-      const sessionId =
-        encodedSessionId === "~missing" ? null : decodeURIComponent(encodedSessionId);
-      const captures = await listPromptCapturesBySessionId(config.outputRoot, sessionId);
-      if (captures.length === 0) {
-        writeJson(res, { error: "Session not found" }, 404);
+      if (res.writableEnded) {
         return;
       }
 
-      writeJson(res, { sessionId, captures });
-      return;
-    }
-
-    if (req.method === "GET" && requestPath.startsWith("/api/captures/")) {
-      const requestId = decodeURIComponent(requestPath.slice("/api/captures/".length));
-      const capture = await getPromptCaptureById(config.outputRoot, requestId);
-      if (!capture) {
-        writeJson(res, { error: "Capture not found" }, 404);
+      if (res.headersSent) {
+        res.destroy(error instanceof Error ? error : new Error(message));
         return;
       }
 
-      writeJson(res, capture);
+      writeError(res, "Internal server error", 500);
+    });
+  });
+}
+
+async function handleGatewayRequest(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  config: PromptGatewayConfig,
+): Promise<void> {
+  const requestPath = getRequestPathname(req.url);
+
+  if (req.method === "GET" && requestPath === "/api/captures") {
+    const captures = await listPromptCaptures(config.outputRoot);
+    writeJson(res, { captures });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath === "/api/sessions") {
+    const sessions = await listPromptSessions(config.outputRoot);
+    writeJson(res, { sessions });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath.startsWith("/api/sessions/")) {
+    const encodedSessionId = requestPath.slice("/api/sessions/".length);
+    const sessionId = encodedSessionId === "~missing" ? null : decodePathSegment(encodedSessionId);
+    if (sessionId === null && encodedSessionId !== "~missing") {
+      writeError(res, "Invalid session id", 400);
       return;
     }
 
-    if (req.method === "GET" && (await serveWebApp(res, requestPath, config.htmlTitle))) {
+    const captures = await listPromptCapturesBySessionId(config.outputRoot, sessionId);
+    if (captures.length === 0) {
+      writeError(res, "Session not found", 404);
       return;
     }
 
-    if (req.method !== "POST" || requestPath !== "/v1/messages") {
-      writeJson(res, { error: "Not found" }, 404);
+    writeJson(res, { sessionId, captures });
+    return;
+  }
+
+  if (req.method === "GET" && requestPath.startsWith("/api/captures/")) {
+    const requestId = decodePathSegment(requestPath.slice("/api/captures/".length));
+    if (!requestId) {
+      writeError(res, "Invalid capture id", 400);
       return;
     }
 
-    const startedAt = Date.now();
-    let parsedBody: unknown = null;
-    let upstreamStatus = 502;
-    let upstreamOk = false;
-    let upstreamError: string | undefined;
-    let upstreamBody: unknown = null;
+    const capture = await getPromptCaptureById(config.outputRoot, requestId);
+    if (!capture) {
+      writeError(res, "Capture not found", 404);
+      return;
+    }
+
+    writeJson(res, capture);
+    return;
+  }
+
+  if (req.method === "GET" && (await serveWebApp(res, requestPath, config.htmlTitle))) {
+    return;
+  }
+
+  if (req.method !== "POST" || requestPath !== "/v1/messages") {
+    writeError(res, "Not found", 404);
+    return;
+  }
+
+  await handleMessagesRequest(req, res, requestPath, config);
+}
+
+async function handleMessagesRequest(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  requestPath: string,
+  config: PromptGatewayConfig,
+): Promise<void> {
+  const startedAt = Date.now();
+  let parsedBody: unknown = null;
+  let upstreamStatus = 502;
+  let upstreamOk = false;
+  let upstreamError: string | undefined;
+  let upstreamBody: unknown = null;
+
+  try {
+    const bodyBuffer = await readRequestBody(req);
+    const bodyText = bodyBuffer.toString("utf8");
 
     try {
-      const bodyBuffer = await readRequestBody(req);
-      parsedBody = bodyBuffer.length === 0 ? null : JSON.parse(bodyBuffer.toString("utf8"));
-
-      const upstreamConfig = resolveUpstreamConfig(process.env, config.upstreamOverrides);
-      const headers = toHeaders(req);
-      if (upstreamConfig.apiKey && !headers.has("x-api-key")) {
-        headers.set("x-api-key", upstreamConfig.apiKey);
-      }
-      if (!headers.has("anthropic-version")) {
-        headers.set("anthropic-version", upstreamConfig.apiVersion);
-      }
-      headers.set("content-type", "application/json");
-
-      const upstreamResponse = await fetch(upstreamConfig.messagesUrl, {
-        method: "POST",
-        headers,
-        body: bodyBuffer,
-      });
-
-      upstreamStatus = upstreamResponse.status;
-      upstreamOk = upstreamResponse.ok;
-      writeResponseHead(res, upstreamResponse);
-      upstreamBody = await forwardResponseAndCapture(upstreamResponse, res);
-    } catch (error) {
-      upstreamError = error instanceof Error ? error.message : String(error);
-      res.statusCode = 502;
-      res.setHeader("content-type", "application/json; charset=utf-8");
-      res.end(JSON.stringify({ error: "Upstream request failed", details: upstreamError }));
-      upstreamBody = { error: "Upstream request failed", details: upstreamError };
-    } finally {
-      const record = capturePromptRequest(
-        {
-          method: req.method ?? "POST",
-          path: requestPath,
-          sessionId: req.headers["x-claude-code-session-id"]?.toString() ?? null,
-          redactedHeaders: redactHeaders(
-            req.headers as Record<string, string | string[] | undefined>,
-          ),
-          body: parsedBody,
-        },
-        {
-          status: res.statusCode || upstreamStatus,
-          durationMs: Date.now() - startedAt,
-          ok: upstreamOk && !upstreamError,
-          error: upstreamError,
-          body: upstreamBody,
-        },
-      );
-
-      const html = renderPromptCaptureHtml(record, { title: config.htmlTitle });
-      try {
-        await writeCaptureArtifacts(record, html, config);
-      } catch (artifactError) {
-        const message =
-          artifactError instanceof Error ? artifactError.message : String(artifactError);
-        process.stderr.write(`[prompt-gateway] failed to write artifacts: ${message}\n`);
-      }
+      parsedBody = bodyBuffer.length === 0 ? null : JSON.parse(bodyText);
+    } catch {
+      upstreamStatus = 400;
+      upstreamError = "Invalid JSON request body";
+      upstreamBody = { error: upstreamError };
+      parsedBody = bodyText;
+      writeJson(res, upstreamBody, upstreamStatus);
+      return;
     }
-  });
+
+    const upstreamConfig = resolveUpstreamConfig(process.env, config.upstreamOverrides);
+    const headers = toHeaders(req);
+    if (upstreamConfig.apiKey && !headers.has("x-api-key")) {
+      headers.set("x-api-key", upstreamConfig.apiKey);
+    }
+    if (!headers.has("anthropic-version")) {
+      headers.set("anthropic-version", upstreamConfig.apiVersion);
+    }
+    headers.set("content-type", "application/json");
+
+    const upstreamResponse = await fetch(upstreamConfig.messagesUrl, {
+      method: "POST",
+      headers,
+      body: bodyBuffer,
+    });
+
+    upstreamStatus = upstreamResponse.status;
+    upstreamOk = upstreamResponse.ok;
+    writeResponseHead(res, upstreamResponse);
+    upstreamBody = await forwardResponseAndCapture(upstreamResponse, res);
+  } catch (error) {
+    upstreamError = error instanceof Error ? error.message : String(error);
+    upstreamBody = { error: "Upstream request failed", details: upstreamError };
+    if (res.headersSent) {
+      if (!res.writableEnded) {
+        res.end();
+      }
+    } else {
+      writeJson(res, upstreamBody, 502);
+    }
+  } finally {
+    const record = capturePromptRequest(
+      {
+        method: req.method ?? "POST",
+        path: requestPath,
+        sessionId: req.headers["x-claude-code-session-id"]?.toString() ?? null,
+        redactedHeaders: redactHeaders(
+          req.headers as Record<string, string | string[] | undefined>,
+        ),
+        body: parsedBody,
+      },
+      {
+        status: res.statusCode || upstreamStatus,
+        durationMs: Date.now() - startedAt,
+        ok: upstreamOk && !upstreamError,
+        error: upstreamError,
+        body: upstreamBody,
+      },
+    );
+
+    const html = renderPromptCaptureHtml(record, { title: config.htmlTitle });
+    try {
+      await writeCaptureArtifacts(record, html, config);
+    } catch (artifactError) {
+      const message =
+        artifactError instanceof Error ? artifactError.message : String(artifactError);
+      process.stderr.write(`[prompt-gateway] failed to write artifacts: ${message}\n`);
+    }
+  }
 }

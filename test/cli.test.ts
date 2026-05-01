@@ -51,6 +51,68 @@ test("claude wrapper injects local ANTHROPIC_BASE_URL and preserves upstream", a
   assert.equal(payload.upstream, "https://litellm.example.com/anthropic");
 });
 
+test("claude wrapper honors explicit dynamic port", async () => {
+  const cliPath = path.resolve(".test-dist/src/cli.js");
+  const configDir = await createTempDir("prompt-gateway-cli-config");
+  const env = { ...process.env };
+
+  delete env.PROMPT_GATEWAY_PORT;
+
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [
+      cliPath,
+      "claude",
+      "--port",
+      "0",
+      "--claude-command",
+      process.execPath,
+      "--",
+      "-e",
+      "console.log(JSON.stringify({ base: process.env.ANTHROPIC_BASE_URL }))",
+    ],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...env,
+        ANTHROPIC_BASE_URL: "https://litellm.example.com/anthropic",
+        CLAUDE_CONFIG_DIR: configDir,
+      },
+    },
+  );
+
+  const lines = stdout.trim().split("\n");
+  const payloadLine = lines[lines.length - 1];
+  assert.ok(payloadLine);
+
+  const payload = JSON.parse(payloadLine) as {
+    base?: string;
+  };
+  const gatewayUrl = new URL(payload.base || "");
+
+  assert.equal(gatewayUrl.hostname, "127.0.0.1");
+  assert.notEqual(Number(gatewayUrl.port), 8787);
+});
+
+test("cli rejects invalid ports before starting the gateway", async () => {
+  const cliPath = path.resolve(".test-dist/src/cli.js");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, "serve", "--port", "abc"], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PROMPT_GATEWAY_PORT: "0",
+      },
+    }),
+    (error) => {
+      const stderr = (error as { stderr?: string }).stderr || "";
+      assert.match(stderr, /--port must be an integer from 0 to 65535/);
+      return true;
+    },
+  );
+});
+
 test("claude wrapper honors Claude settings upstream while overriding Claude base URL", async () => {
   const cliPath = path.resolve(".test-dist/src/cli.js");
   const tempDir = await createTempDir("prompt-gateway-cli");

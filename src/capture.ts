@@ -203,6 +203,7 @@ export function capturePromptRequest(
 
 const SESSION_CAPTURE_DIR = "sessions";
 const MISSING_SESSION_SLUG = "missing-session";
+const CAPTURE_READ_CONCURRENCY = 32;
 
 function getValidTimeZone(timezone?: string): string | undefined {
   const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -370,8 +371,19 @@ async function listCaptureFilePaths(outputRoot: string): Promise<string[]> {
 }
 
 async function readCaptureFile(filePath: string): Promise<PromptCaptureRecord | null> {
+  let raw: string;
+
   try {
-    const raw = await fs.readFile(filePath, "utf8");
+    raw = await fs.readFile(filePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  }
+
+  try {
     return normalizeCaptureRecord(JSON.parse(raw) as PromptCaptureRecord);
   } catch {
     return null;
@@ -383,16 +395,33 @@ export async function listPromptCaptures(outputRoot: string): Promise<PromptCapt
   return records.map(toListItem).sort((left, right) => right.timestampMs - left.timestampMs);
 }
 
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  limit: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(limit, values.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < values.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await mapper(values[index]);
+      }
+    }),
+  );
+
+  return results;
+}
+
 async function listPromptCaptureRecords(outputRoot: string): Promise<PromptCaptureRecord[]> {
   const files = await listCaptureFilePaths(outputRoot);
-  const records: PromptCaptureRecord[] = [];
-
-  for (const file of files) {
-    const record = await readCaptureFile(file);
-    if (record) {
-      records.push(record);
-    }
-  }
+  const records = (
+    await mapWithConcurrency(files, CAPTURE_READ_CONCURRENCY, (file) => readCaptureFile(file))
+  ).filter((record): record is PromptCaptureRecord => Boolean(record));
 
   return records.sort((left, right) => right.timestampMs - left.timestampMs);
 }

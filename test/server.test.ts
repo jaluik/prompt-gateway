@@ -179,6 +179,82 @@ test("gateway records upstream failure responses", async () => {
   }
 });
 
+test("gateway rejects invalid JSON messages requests without proxying upstream", async () => {
+  const tempRoot = await createTempDir("prompt-gateway-invalid-json");
+  let upstreamHitCount = 0;
+  const upstream = http.createServer((_, res) => {
+    upstreamHitCount += 1;
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+  });
+  const upstreamInfo = await listen(upstream);
+  const gateway = createGatewayServer({
+    host: "127.0.0.1",
+    port: 0,
+    outputRoot: tempRoot,
+    writeJson: true,
+    writeHtml: false,
+    htmlTitle: "Prompt Capture",
+    upstreamOverrides: {
+      baseUrl: upstreamInfo.url,
+    },
+  });
+  const gatewayInfo = await listen(gateway);
+
+  try {
+    const response = await fetch(`${gatewayInfo.url}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{not json",
+    });
+
+    assert.equal(response.status, 400);
+    const body = (await response.json()) as { error?: string };
+    assert.equal(body.error, "Invalid JSON request body");
+    assert.equal(upstreamHitCount, 0);
+
+    const captureDir = path.join(tempRoot, "captures", "sessions", "missing-session");
+    const captureFiles = await waitForEntries(() => fs.readdir(captureDir), "capture file");
+    const captureFile = onlyEntry(captureFiles, "capture file");
+    const capture = JSON.parse(await fs.readFile(path.join(captureDir, captureFile), "utf8"));
+
+    assert.equal(capture.response.status, 400);
+    assert.equal(capture.response.ok, false);
+    assert.equal(capture.response.error, "Invalid JSON request body");
+    assert.equal(capture.requestBody.raw, "{not json");
+  } finally {
+    await close(gatewayInfo.server);
+    await close(upstreamInfo.server);
+  }
+});
+
+test("gateway rejects malformed encoded API ids", async () => {
+  const tempRoot = await createTempDir("prompt-gateway-bad-api-id");
+  const gateway = createGatewayServer({
+    host: "127.0.0.1",
+    port: 0,
+    outputRoot: tempRoot,
+    writeJson: true,
+    writeHtml: false,
+    htmlTitle: "Prompt Capture",
+  });
+  const gatewayInfo = await listen(gateway);
+
+  try {
+    const sessionResponse = await fetch(`${gatewayInfo.url}/api/sessions/%E0%A4%A`);
+    assert.equal(sessionResponse.status, 400);
+    const sessionBody = (await sessionResponse.json()) as { error?: string };
+    assert.equal(sessionBody.error, "Invalid session id");
+
+    const captureResponse = await fetch(`${gatewayInfo.url}/api/captures/%E0%A4%A`);
+    assert.equal(captureResponse.status, 400);
+    const captureBody = (await captureResponse.json()) as { error?: string };
+    assert.equal(captureBody.error, "Invalid capture id");
+  } finally {
+    await close(gatewayInfo.server);
+  }
+});
+
 test("gateway exposes capture history APIs and browser shell", async () => {
   const tempRoot = await createTempDir("prompt-gateway-browser");
   const upstream = http.createServer((_, res) => {
