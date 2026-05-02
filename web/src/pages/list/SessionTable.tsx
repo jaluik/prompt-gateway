@@ -108,6 +108,9 @@ function SessionRow({
   onSelectKey: (value: string) => void;
 }) {
   const key = sessionKey(session.sessionId);
+  const latestContextSize = analytics?.latestContextSize ?? session.latestContextSize;
+  const latestToolCount = analytics?.latestToolCount ?? session.latestToolCount;
+  const hasToolCalls = analytics?.hasToolCalls ?? session.hasToolCalls;
 
   return (
     <tr
@@ -124,13 +127,13 @@ function SessionRow({
           <div>
             <div className="session-id">{compactSessionId(session.sessionId)}</div>
             <div className="session-desc">
-              {analytics?.firstPrompt ?? session.promptTextPreview ?? MISSING}
+              {analytics?.firstPrompt ?? session.firstPromptTextPreview ?? MISSING}
             </div>
           </div>
         </div>
       </td>
       <td>
-        <div className="mono">{formatDate(analytics?.startAt ?? session.latestCapturedAt)}</div>
+        <div className="mono">{formatDate(analytics?.startAt ?? session.firstCapturedAt)}</div>
         <div className="muted">至 {formatDate(analytics?.endAt ?? session.latestCapturedAt)}</div>
       </td>
       <td className="strong-number">{session.requestCount}</td>
@@ -148,17 +151,17 @@ function SessionRow({
       </td>
       <td>
         <div className="density">
-          <MiniBar value={analytics?.latestContextSize ?? 0} max={maxContext} />
+          <MiniBar value={latestContextSize} max={maxContext} />
           <div className="density-caption">
-            <span>{analytics ? formatCompactNumber(analytics.latestContextSize) : "loading"}</span>
+            <span>{formatCompactNumber(latestContextSize)}</span>
             <span>estimated</span>
           </div>
         </div>
       </td>
       <td>
         <div className="badge-row">
-          <Badge label={`${analytics?.latestToolCount ?? 0} tools`} tone="amber" />
-          {analytics?.hasToolCalls ? <Badge label="tool_use" tone="teal" /> : null}
+          <Badge label={`${latestToolCount} tools`} tone="amber" />
+          {hasToolCalls ? <Badge label="tool_use" tone="teal" /> : null}
         </div>
       </td>
       <td>

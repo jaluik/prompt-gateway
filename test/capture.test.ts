@@ -289,6 +289,60 @@ test("capture helpers list and resolve saved prompt captures", async () => {
   assert.match(resolved?.derived.promptTextPreview || "", /first prompt/);
 });
 
+test("capture helpers use session index for list summaries", async () => {
+  const tempRoot = await createTempDir("prompt-gateway-index");
+  const record = capturePromptRequest(
+    {
+      method: "POST",
+      path: "/v1/messages",
+      sessionId: "indexed-session",
+      redactedHeaders: {},
+      body: {
+        model: "claude-indexed",
+        context_management: { edits: [{ type: "clear_tool_uses_20250919" }] },
+        tools: [{ name: "Bash", input_schema: { type: "object" } }],
+        messages: [
+          { role: "user", content: "index prompt" },
+          {
+            role: "assistant",
+            content: [{ type: "tool_use", id: "toolu_123", name: "Bash", input: {} }],
+          },
+        ],
+      },
+    },
+    {
+      status: 200,
+      durationMs: 11,
+      ok: true,
+      body: null,
+    },
+  );
+
+  const result = await writeCaptureArtifacts(record, renderPromptCaptureHtml(record), {
+    outputRoot: tempRoot,
+    writeJson: true,
+    writeHtml: false,
+  });
+  assert.ok(result.jsonPath);
+  await fs.writeFile(result.jsonPath, "{not valid json", "utf8");
+
+  const captures = await listPromptCaptures(tempRoot);
+  assert.equal(captures.length, 1);
+  assert.equal(captures[0]?.requestId, record.requestId);
+  assert.equal(captures[0]?.toolCount, 1);
+  assert.deepEqual(captures[0]?.toolNames, ["Bash"]);
+
+  const sessions = await listPromptSessions(tempRoot);
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0]?.sessionId, "indexed-session");
+  assert.equal(sessions[0]?.latestRequestId, record.requestId);
+  assert.equal(sessions[0]?.latestToolCount, 1);
+  assert.equal(sessions[0]?.maxToolCount, 1);
+  assert.equal(sessions[0]?.hasToolCalls, true);
+  assert.equal(sessions[0]?.hasContextManagement, true);
+  assert.ok((sessions[0]?.maxContextSize ?? 0) > 0);
+});
+
 test("capture helpers read legacy dated capture directories", async () => {
   const tempRoot = await createTempDir("prompt-gateway-legacy-captures");
   const record = capturePromptRequest(

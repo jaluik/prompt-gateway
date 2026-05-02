@@ -57,7 +57,7 @@ export function SessionPreview({
             <PreviewKv label="Requests" value={String(session.requestCount)} />
             <PreviewKv
               label="Tools"
-              value={analytics ? `${analytics.latestToolCount} definitions` : "loading"}
+              value={`${analytics?.latestToolCount ?? session.latestToolCount} definitions`}
             />
             <PreviewKv
               label="Model"
@@ -72,7 +72,7 @@ export function SessionPreview({
 
         <PromptBlock
           label="首次用户输入"
-          text={analytics?.firstPrompt ?? session.promptTextPreview ?? MISSING}
+          text={analytics?.firstPrompt ?? session.firstPromptTextPreview ?? MISSING}
         />
         <PromptBlock
           strong
@@ -111,7 +111,7 @@ export function SessionPreview({
                 />
               </button>
             ))}
-            {!analytics ? <div className="muted">正在计算...</div> : null}
+            {!analytics ? <div className="muted">选择详情后加载最近请求...</div> : null}
           </div>
         </div>
 

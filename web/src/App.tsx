@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { useSessionDetails, useSessions } from "./hooks/useSessions";
+import { useSessions } from "./hooks/useSessions";
 import { parseRoute } from "./lib/routing";
 import { DetailPage } from "./pages/detail/DetailPage";
 import { ListPage } from "./pages/list/ListPage";
@@ -10,7 +10,6 @@ export function App() {
   const [route, setRoute] = useState<RouteState>(() => parseRoute(window.location.pathname));
   const [globalQuery, setGlobalQuery] = useState("");
   const { sessions, loading, error } = useSessions();
-  const sessionDetails = useSessionDetails(sessions);
 
   useEffect(() => {
     const onPopState = () => {
@@ -33,7 +32,6 @@ export function App() {
 
   return (
     <ListPage
-      details={sessionDetails}
       error={error}
       loading={loading}
       onQueryChange={setGlobalQuery}

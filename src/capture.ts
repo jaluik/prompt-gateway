@@ -32,6 +32,10 @@ interface HeadersLike {
   entries(): IterableIterator<[string, string]>;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function isHeadersLike(
   value: HeadersLike | Record<string, string | string[] | undefined>,
 ): value is HeadersLike {
@@ -202,6 +206,7 @@ export function capturePromptRequest(
 }
 
 const SESSION_CAPTURE_DIR = "sessions";
+const SESSION_INDEX_DIR = "session-index";
 const MISSING_SESSION_SLUG = "missing-session";
 const CAPTURE_READ_CONCURRENCY = 32;
 
@@ -272,6 +277,52 @@ function getArtifactBaseName(record: PromptCaptureRecord, timezone?: string): st
   return `${stamp}__${sessionSlug}__${status}__${modelSlug}__req-${requestSlug}`;
 }
 
+function compactJsonSize(value: unknown): number {
+  try {
+    return JSON.stringify(value).length;
+  } catch {
+    return String(value).length;
+  }
+}
+
+function getToolNames(rawBody: unknown): string[] {
+  const body = isRecord(rawBody) ? rawBody : {};
+  if (!Array.isArray(body.tools)) {
+    return [];
+  }
+
+  return body.tools
+    .map((tool) => (isRecord(tool) && typeof tool.name === "string" ? tool.name : null))
+    .filter((name): name is string => Boolean(name));
+}
+
+function hasBlockType(value: unknown, types: Set<string>): boolean {
+  if (Array.isArray(value)) {
+    return value.some((item) => hasBlockType(item, types));
+  }
+
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (typeof value.type === "string" && types.has(value.type)) {
+    return true;
+  }
+
+  return Object.values(value).some((item) => hasBlockType(item, types));
+}
+
+function hasContextManagement(rawBody: unknown): boolean {
+  return isRecord(rawBody) && typeof rawBody.context_management !== "undefined";
+}
+
+async function appendCaptureIndex(outputRoot: string, record: PromptCaptureRecord): Promise<void> {
+  const indexDir = path.join(outputRoot, "captures", SESSION_INDEX_DIR);
+  const indexPath = path.join(indexDir, `${getSessionSlug(record.sessionId)}.jsonl`);
+  await fs.mkdir(indexDir, { recursive: true });
+  await fs.appendFile(indexPath, `${JSON.stringify(toListItem(record))}\n`, "utf8");
+}
+
 export async function writeCaptureArtifacts(
   record: PromptCaptureRecord,
   html: string,
@@ -288,6 +339,7 @@ export async function writeCaptureArtifacts(
     jsonPath = path.join(captureDir, `${baseName}.json`);
     await fs.mkdir(captureDir, { recursive: true });
     await fs.writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+    await appendCaptureIndex(config.outputRoot, record);
   }
 
   if (config.writeHtml) {
@@ -301,18 +353,29 @@ export async function writeCaptureArtifacts(
 }
 
 function toListItem(record: PromptCaptureRecord): PromptCaptureListItem {
+  const normalizedRecord = normalizeCaptureRecord(record);
+  const toolNames = getToolNames(normalizedRecord.requestBody.raw);
+
   return {
-    requestId: record.requestId,
-    capturedAt: record.capturedAt,
-    timestampMs: record.timestampMs,
-    sessionId: record.sessionId,
-    model: record.derived.model,
-    maxTokens: record.derived.maxTokens,
-    stream: record.derived.stream,
-    status: record.response.status,
-    durationMs: record.response.durationMs,
-    ok: record.response.ok,
-    promptTextPreview: record.derived.promptTextPreview,
+    requestId: normalizedRecord.requestId,
+    capturedAt: normalizedRecord.capturedAt,
+    timestampMs: normalizedRecord.timestampMs,
+    sessionId: normalizedRecord.sessionId,
+    model: normalizedRecord.derived.model,
+    maxTokens: normalizedRecord.derived.maxTokens,
+    stream: normalizedRecord.derived.stream,
+    status: normalizedRecord.response.status,
+    durationMs: normalizedRecord.response.durationMs,
+    ok: normalizedRecord.response.ok,
+    promptTextPreview: normalizedRecord.derived.promptTextPreview,
+    contextSize: compactJsonSize(normalizedRecord.requestBody.raw),
+    toolCount: toolNames.length,
+    toolNames,
+    hasToolCalls: hasBlockType(
+      normalizedRecord.requestBody.raw,
+      new Set(["tool_use", "tool_result"]),
+    ),
+    hasContextManagement: hasContextManagement(normalizedRecord.requestBody.raw),
   };
 }
 
@@ -348,6 +411,85 @@ async function listJsonFiles(root: string): Promise<string[]> {
 
     throw error;
   }
+}
+
+function normalizeCaptureListItem(value: unknown): PromptCaptureListItem | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.requestId !== "string" ||
+    typeof value.capturedAt !== "string" ||
+    typeof value.timestampMs !== "number" ||
+    !(typeof value.sessionId === "string" || value.sessionId === null) ||
+    !(typeof value.model === "string" || value.model === null) ||
+    !(typeof value.maxTokens === "number" || value.maxTokens === null) ||
+    typeof value.stream !== "boolean" ||
+    typeof value.status !== "number" ||
+    typeof value.durationMs !== "number" ||
+    typeof value.ok !== "boolean" ||
+    typeof value.promptTextPreview !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    requestId: value.requestId,
+    capturedAt: value.capturedAt,
+    timestampMs: value.timestampMs,
+    sessionId: value.sessionId,
+    model: value.model,
+    maxTokens: value.maxTokens,
+    stream: value.stream,
+    status: value.status,
+    durationMs: value.durationMs,
+    ok: value.ok,
+    promptTextPreview: value.promptTextPreview,
+    contextSize: typeof value.contextSize === "number" ? value.contextSize : 0,
+    toolCount: typeof value.toolCount === "number" ? value.toolCount : 0,
+    toolNames: Array.isArray(value.toolNames)
+      ? value.toolNames.filter((name): name is string => typeof name === "string")
+      : [],
+    hasToolCalls: value.hasToolCalls === true,
+    hasContextManagement: value.hasContextManagement === true,
+  };
+}
+
+function dedupeCaptureListItems(items: PromptCaptureListItem[]): PromptCaptureListItem[] {
+  return Array.from(new Map(items.map((item) => [item.requestId, item])).values());
+}
+
+async function readCaptureIndexFile(
+  outputRoot: string,
+  sessionSlug: string,
+): Promise<PromptCaptureListItem[] | null> {
+  const indexPath = path.join(outputRoot, "captures", SESSION_INDEX_DIR, `${sessionSlug}.jsonl`);
+  let raw: string;
+
+  try {
+    raw = await fs.readFile(indexPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  }
+
+  const items = raw
+    .split("\n")
+    .filter((line) => line.trim())
+    .flatMap((line) => {
+      try {
+        const item = normalizeCaptureListItem(JSON.parse(line));
+        return item ? [item] : [];
+      } catch {
+        return [];
+      }
+    });
+
+  return dedupeCaptureListItems(items);
 }
 
 async function listCaptureFilePaths(outputRoot: string): Promise<string[]> {
@@ -390,9 +532,51 @@ async function readCaptureFile(filePath: string): Promise<PromptCaptureRecord | 
   }
 }
 
+async function readCaptureListItemsForSessionDir(
+  outputRoot: string,
+  sessionSlug: string,
+): Promise<PromptCaptureListItem[]> {
+  const sessionDir = path.join(outputRoot, "captures", SESSION_CAPTURE_DIR, sessionSlug);
+  const jsonFiles = await listJsonFiles(sessionDir);
+  const indexedItems = await readCaptureIndexFile(outputRoot, sessionSlug);
+
+  if (indexedItems && indexedItems.length === jsonFiles.length) {
+    return indexedItems;
+  }
+
+  const records = (
+    await mapWithConcurrency(jsonFiles, CAPTURE_READ_CONCURRENCY, (file) => readCaptureFile(file))
+  ).filter((record): record is PromptCaptureRecord => Boolean(record));
+
+  return records.map(toListItem);
+}
+
+async function listPromptCaptureIndexItems(outputRoot: string): Promise<PromptCaptureListItem[]> {
+  const capturesRoot = path.join(outputRoot, "captures");
+  const sessionRoot = path.join(capturesRoot, SESSION_CAPTURE_DIR);
+  const sessionDirs = await listDirectories(sessionRoot);
+  const items: PromptCaptureListItem[] = [];
+
+  for (const sessionDir of sessionDirs) {
+    items.push(...(await readCaptureListItemsForSessionDir(outputRoot, sessionDir)));
+  }
+
+  const legacyDayDirs = (await listDirectories(capturesRoot)).filter((dir) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(dir),
+  );
+  for (const dayDir of legacyDayDirs) {
+    const files = await listJsonFiles(path.join(capturesRoot, dayDir));
+    const records = (
+      await mapWithConcurrency(files, CAPTURE_READ_CONCURRENCY, (file) => readCaptureFile(file))
+    ).filter((record): record is PromptCaptureRecord => Boolean(record));
+    items.push(...records.map(toListItem));
+  }
+
+  return dedupeCaptureListItems(items).sort((left, right) => right.timestampMs - left.timestampMs);
+}
+
 export async function listPromptCaptures(outputRoot: string): Promise<PromptCaptureListItem[]> {
-  const records = await listPromptCaptureRecords(outputRoot);
-  return records.map(toListItem).sort((left, right) => right.timestampMs - left.timestampMs);
+  return listPromptCaptureIndexItems(outputRoot);
 }
 
 async function mapWithConcurrency<T, R>(
@@ -427,39 +611,50 @@ async function listPromptCaptureRecords(outputRoot: string): Promise<PromptCaptu
 }
 
 export async function listPromptSessions(outputRoot: string): Promise<PromptSessionListItem[]> {
-  const records = await listPromptCaptureRecords(outputRoot);
-  const sessions = new Map<string, PromptCaptureRecord[]>();
+  const captures = await listPromptCaptureIndexItems(outputRoot);
+  const sessions = new Map<string, PromptCaptureListItem[]>();
 
-  for (const record of records) {
-    const key = record.sessionId ?? "";
-    sessions.set(key, [...(sessions.get(key) ?? []), record]);
+  for (const capture of captures) {
+    const key = capture.sessionId ?? "";
+    sessions.set(key, [...(sessions.get(key) ?? []), capture]);
   }
 
   return Array.from(sessions.values())
-    .map((sessionRecords) => {
-      const sorted = [...sessionRecords].sort(
+    .map((sessionCaptures) => {
+      const sorted = [...sessionCaptures].sort(
         (left, right) => right.timestampMs - left.timestampMs,
       );
       const latest = sorted[0];
+      const first = sorted[sorted.length - 1];
       const models = Array.from(
         new Set(
-          sorted
-            .map((record) => record.derived.model)
-            .filter((model): model is string => Boolean(model)),
+          sorted.map((capture) => capture.model).filter((model): model is string => Boolean(model)),
         ),
       );
+      const toolNames = Array.from(new Set(sorted.flatMap((capture) => capture.toolNames))).sort();
 
       return {
         sessionId: latest.sessionId,
+        latestRequestId: latest.requestId,
+        firstCapturedAt: first.capturedAt,
         latestCapturedAt: latest.capturedAt,
+        firstTimestampMs: first.timestampMs,
         latestTimestampMs: latest.timestampMs,
         requestCount: sorted.length,
-        successCount: sorted.filter((record) => record.response.ok).length,
-        errorCount: sorted.filter((record) => !record.response.ok).length,
-        streamCount: sorted.filter((record) => record.derived.stream).length,
-        durationMs: sorted.reduce((total, record) => total + record.response.durationMs, 0),
+        successCount: sorted.filter((capture) => capture.ok).length,
+        errorCount: sorted.filter((capture) => !capture.ok).length,
+        streamCount: sorted.filter((capture) => capture.stream).length,
+        durationMs: sorted.reduce((total, capture) => total + capture.durationMs, 0),
         models,
-        promptTextPreview: latest.derived.promptTextPreview,
+        promptTextPreview: latest.promptTextPreview,
+        firstPromptTextPreview: first.promptTextPreview,
+        maxContextSize: Math.max(0, ...sorted.map((capture) => capture.contextSize)),
+        latestContextSize: latest.contextSize,
+        maxToolCount: Math.max(0, ...sorted.map((capture) => capture.toolCount)),
+        latestToolCount: latest.toolCount,
+        hasToolCalls: sorted.some((capture) => capture.hasToolCalls),
+        hasContextManagement: sorted.some((capture) => capture.hasContextManagement),
+        toolNames,
       };
     })
     .sort((left, right) => right.latestTimestampMs - left.latestTimestampMs);

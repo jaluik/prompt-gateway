@@ -3,8 +3,9 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { AppTopbar } from "../../components/AppTopbar";
 import { Button } from "../../components/ui";
+import { useSessionDetails } from "../../hooks/useSessions";
 import { sessionKey } from "../../lib/routing";
-import type { SessionAnalytics, SessionListItem, SortMode, TimeFilter } from "../../types";
+import type { SessionListItem, SortMode, TimeFilter } from "../../types";
 import { ListFilters } from "./ListFilters";
 import { ListMetrics } from "./ListMetrics";
 import { SessionPreview } from "./SessionPreview";
@@ -12,14 +13,12 @@ import { SessionTable } from "./SessionTable";
 
 export function ListPage({
   sessions,
-  details,
   loading,
   error,
   query,
   onQueryChange,
 }: {
   sessions: SessionListItem[];
-  details: Record<string, SessionAnalytics>;
   loading: boolean;
   error: string | null;
   query: string;
@@ -41,7 +40,6 @@ export function ListPage({
     () =>
       filterSessions({
         sessions,
-        details,
         query: deferredQuery,
         timeFilter,
         modelFilter,
@@ -49,16 +47,7 @@ export function ListPage({
         contextFilter,
         sortMode,
       }),
-    [
-      contextFilter,
-      deferredQuery,
-      details,
-      modelFilter,
-      sessions,
-      sortMode,
-      timeFilter,
-      toolFilter,
-    ],
+    [contextFilter, deferredQuery, modelFilter, sessions, sortMode, timeFilter, toolFilter],
   );
 
   useEffect(() => {
@@ -79,8 +68,13 @@ export function ListPage({
     filteredSessions.find((session) => sessionKey(session.sessionId) === selectedKey) ??
     filteredSessions[0] ??
     null;
+  const selectedSessions = useMemo(
+    () => (selectedSession ? [selectedSession] : []),
+    [selectedSession],
+  );
+  const details = useSessionDetails(selectedSessions);
   const selectedAnalytics = selectedSession ? details[sessionKey(selectedSession.sessionId)] : null;
-  const totals = useMemo(() => buildTotals(sessions, details), [details, sessions]);
+  const totals = useMemo(() => buildTotals(sessions), [sessions]);
 
   return (
     <>
@@ -157,7 +151,6 @@ export function ListPage({
 
 function filterSessions({
   sessions,
-  details,
   query,
   timeFilter,
   modelFilter,
@@ -166,7 +159,6 @@ function filterSessions({
   sortMode,
 }: {
   sessions: SessionListItem[];
-  details: Record<string, SessionAnalytics>;
   query: string;
   timeFilter: TimeFilter;
   modelFilter: string;
@@ -184,18 +176,13 @@ function filterSessions({
 
   return sessions
     .filter((session) => {
-      const analytics = details[sessionKey(session.sessionId)];
       const haystack = [
         session.sessionId ?? "",
+        session.latestRequestId,
         session.promptTextPreview,
+        session.firstPromptTextPreview,
         session.models.join(" "),
-        analytics?.firstPrompt ?? "",
-        analytics?.latestPrompt ?? "",
-        analytics?.analyses
-          .map((analysis) => `${analysis.trigger.label} ${analysis.trigger.preview}`)
-          .join(" ") ?? "",
-        analytics?.toolNames.join(" ") ?? "",
-        analytics?.captures.map((capture) => capture.requestId).join(" ") ?? "",
+        session.toolNames.join(" "),
       ]
         .join(" ")
         .toLowerCase();
@@ -212,21 +199,19 @@ function filterSessions({
         return false;
       }
 
-      if (toolFilter === "with-tools" && (analytics?.maxToolCount ?? 0) === 0) {
+      if (toolFilter === "with-tools" && session.maxToolCount === 0) {
         return false;
       }
 
-      if (toolFilter === "with-tool-calls" && !analytics?.hasToolCalls) {
+      if (toolFilter === "with-tool-calls" && !session.hasToolCalls) {
         return false;
       }
 
-      return contextFilter !== "with-context" || !!analytics?.hasContextManagement;
+      return contextFilter !== "with-context" || session.hasContextManagement;
     })
     .sort((left, right) => {
-      const leftAnalytics = details[sessionKey(left.sessionId)];
-      const rightAnalytics = details[sessionKey(right.sessionId)];
       if (sortMode === "context") {
-        return (rightAnalytics?.maxContextSize ?? 0) - (leftAnalytics?.maxContextSize ?? 0);
+        return right.maxContextSize - left.maxContextSize;
       }
 
       if (sortMode === "requests") {
@@ -237,17 +222,13 @@ function filterSessions({
     });
 }
 
-function buildTotals(
-  sessions: SessionListItem[],
-  details: Record<string, SessionAnalytics>,
-): { requestCount: number; maxContext: number; toolHeavy: number } {
+function buildTotals(sessions: SessionListItem[]): {
+  requestCount: number;
+  maxContext: number;
+  toolHeavy: number;
+} {
   const requestCount = sessions.reduce((total, session) => total + session.requestCount, 0);
-  const maxContext = Math.max(
-    0,
-    ...Object.values(details).map((analytics) => analytics.maxContextSize),
-  );
-  const toolHeavy = Object.values(details).filter(
-    (analytics) => analytics.maxToolCount >= 20,
-  ).length;
+  const maxContext = Math.max(0, ...sessions.map((session) => session.maxContextSize));
+  const toolHeavy = sessions.filter((session) => session.maxToolCount >= 20).length;
   return { requestCount, maxContext, toolHeavy };
 }

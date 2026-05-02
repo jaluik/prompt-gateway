@@ -67,11 +67,19 @@ export interface PromptCaptureListItem {
   durationMs: number;
   ok: boolean;
   promptTextPreview: string;
+  contextSize: number;
+  toolCount: number;
+  toolNames: string[];
+  hasToolCalls: boolean;
+  hasContextManagement: boolean;
 }
 
 export interface PromptSessionListItem {
   sessionId: string | null;
+  latestRequestId: string;
+  firstCapturedAt: string;
   latestCapturedAt: string;
+  firstTimestampMs: number;
   latestTimestampMs: number;
   requestCount: number;
   successCount: number;
@@ -80,6 +88,14 @@ export interface PromptSessionListItem {
   durationMs: number;
   models: string[];
   promptTextPreview: string;
+  firstPromptTextPreview: string;
+  maxContextSize: number;
+  latestContextSize: number;
+  maxToolCount: number;
+  latestToolCount: number;
+  hasToolCalls: boolean;
+  hasContextManagement: boolean;
+  toolNames: string[];
 }
 
 export interface RenderPromptHtmlOptions {
