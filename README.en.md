@@ -86,6 +86,18 @@ Common sensitive headers are redacted by default:
 - `cookie`
 - `set-cookie`
 
+## Privacy And Cleanup
+
+Capture files keep the raw request body, and when available they also keep the response body. That means they can contain system prompts, user input, tool results, file snippets, command output, and model responses. By default, only common sensitive request headers are redacted; body content is not rewritten.
+
+The default output directory is `.claude/prompt-gateway`, and this repository template ignores `.claude`. If you point `--output` somewhere else, make sure that directory will not be committed to git. Avoid sharing complete capture files unless you have reviewed their contents.
+
+Remove local capture history:
+
+```bash
+rm -rf .claude/prompt-gateway
+```
+
 ## How It Works
 
 `prompt-gateway claude` preserves the normal Claude Code workflow:

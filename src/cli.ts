@@ -203,6 +203,10 @@ function getConfig(overrides: CliOverrides): PromptGatewayConfig {
   };
 }
 
+function getPrivacyNotice(outputRoot: string): string {
+  return `⚠️  Privacy: captures include raw request and response bodies. Keep ${outputRoot} private and out of git.`;
+}
+
 async function listenServer(
   server: http.Server,
   host: string,
@@ -280,6 +284,7 @@ async function serve(overrides: CliOverrides): Promise<void> {
       `🌐 Local gateway: ${address.url}`,
       `📝 Capture store: ${config.outputRoot}`,
       `👀 Open history: ${address.url}/`,
+      getPrivacyNotice(config.outputRoot),
       "",
       "Claude Code requests sent to this gateway will now be captured locally.",
       "",
@@ -418,6 +423,7 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
       `🔀 Real upstream stays at: ${upstreamBaseUrl || "https://api.anthropic.com"}`,
       `📝 Captures will be saved in: ${config.outputRoot}`,
       `🌐 Inspect prompts in your browser: ${viewerUrl}`,
+      getPrivacyNotice(config.outputRoot),
       "",
       "Your current Claude Code session is now flowing through the local proxy.",
       "",

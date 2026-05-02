@@ -41,6 +41,7 @@ test("claude wrapper injects local ANTHROPIC_BASE_URL and preserves upstream", a
   assert.ok(payloadLine);
   assert.match(stdout, /Prompt Gateway wrapped Claude Code/);
   assert.match(stdout, /Inspect prompts in your browser/);
+  assert.match(stdout, /Privacy: captures include raw request and response bodies/);
 
   const payload = JSON.parse(payloadLine) as {
     base?: string;
