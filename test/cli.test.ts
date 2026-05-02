@@ -125,7 +125,12 @@ test("claude wrapper honors Claude settings upstream while overriding Claude bas
     JSON.stringify({
       env: {
         ANTHROPIC_BASE_URL: "https://api.kimi.com/coding/",
+        ANTHROPIC_API_KEY: "settings-api-key",
+        ANTHROPIC_VERSION: "2025-01-01",
         ANTHROPIC_AUTH_TOKEN: "test-token",
+      },
+      permissions: {
+        allow: ["Bash(pnpm test)"],
       },
     }),
   );
@@ -169,7 +174,7 @@ console.log(JSON.stringify({
   const payload = JSON.parse(payloadLine) as {
     base?: string;
     upstream?: string;
-    settings?: { env?: Record<string, string> };
+    settings?: { env?: Record<string, string>; permissions?: unknown };
     settingsPath?: string;
     args?: string[];
   };
@@ -178,6 +183,12 @@ console.log(JSON.stringify({
   assert.equal(payload.upstream, "https://api.kimi.com/coding/");
   assert.equal(payload.settings?.env?.ANTHROPIC_BASE_URL, payload.base);
   assert.equal(payload.settings?.env?.ANTHROPIC_API_URL, payload.base);
+  assert.equal(payload.settings?.env?.ANTHROPIC_API_KEY, "settings-api-key");
+  assert.equal(payload.settings?.env?.ANTHROPIC_VERSION, "2025-01-01");
+  assert.equal(payload.settings?.env?.ANTHROPIC_AUTH_TOKEN, "test-token");
+  assert.deepEqual(payload.settings?.permissions, {
+    allow: ["Bash(pnpm test)"],
+  });
   assert.equal(payload.args?.[0], "--settings");
   assert.equal(payload.settingsPath, payload.args?.[1]);
   assert.equal(path.basename(payload.settingsPath || ""), "settings.json");

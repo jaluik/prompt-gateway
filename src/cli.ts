@@ -24,6 +24,11 @@ interface CliOverrides {
 
 type ClaudeSettingsEnv = Partial<Record<"ANTHROPIC_BASE_URL" | "ANTHROPIC_API_URL", string>>;
 
+interface ClaudeSettingsSnapshot {
+  env: ClaudeSettingsEnv;
+  settings: Record<string, unknown>;
+}
+
 interface GeneratedClaudeSettings {
   path: string;
   cleanup: () => Promise<void>;
@@ -294,26 +299,34 @@ function getClaudeSettingsPath(env: NodeJS.ProcessEnv): string {
   return path.join(configDir, "settings.json");
 }
 
-async function readClaudeSettingsEnv(env: NodeJS.ProcessEnv): Promise<ClaudeSettingsEnv> {
+function extractClaudeSettingsEnv(settings: Record<string, unknown>): ClaudeSettingsEnv {
+  if (!isRecord(settings.env)) {
+    return {};
+  }
+
+  const settingsEnv: ClaudeSettingsEnv = {};
+  for (const key of ["ANTHROPIC_BASE_URL", "ANTHROPIC_API_URL"] as const) {
+    const value = settings.env[key];
+    if (typeof value === "string" && value.trim()) {
+      settingsEnv[key] = value;
+    }
+  }
+
+  return settingsEnv;
+}
+
+async function readClaudeSettings(env: NodeJS.ProcessEnv): Promise<ClaudeSettingsSnapshot> {
   try {
     const settingsText = await fs.readFile(getClaudeSettingsPath(env), "utf8");
     const settings = JSON.parse(settingsText) as unknown;
-    if (!isRecord(settings) || !isRecord(settings.env)) {
-      return {};
+    if (!isRecord(settings)) {
+      return { env: {}, settings: {} };
     }
 
-    const settingsEnv: ClaudeSettingsEnv = {};
-    for (const key of ["ANTHROPIC_BASE_URL", "ANTHROPIC_API_URL"] as const) {
-      const value = settings.env[key];
-      if (typeof value === "string" && value.trim()) {
-        settingsEnv[key] = value;
-      }
-    }
-
-    return settingsEnv;
+    return { env: extractClaudeSettingsEnv(settings), settings };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return {};
+      return { env: {}, settings: {} };
     }
 
     throw error;
@@ -339,20 +352,23 @@ function shouldInjectClaudeSettings(claudeCommand: string): boolean {
   return path.basename(claudeCommand).toLowerCase().includes("claude");
 }
 
-async function createGatewayClaudeSettings(gatewayUrl: string): Promise<GeneratedClaudeSettings> {
+async function createGatewayClaudeSettings(
+  gatewayUrl: string,
+  sourceSettings: Record<string, unknown>,
+): Promise<GeneratedClaudeSettings> {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "prompt-gateway-claude-settings-"));
   const settingsPath = path.join(tempDir, "settings.json");
+  const sourceEnv = isRecord(sourceSettings.env) ? sourceSettings.env : {};
+  const gatewaySettings = {
+    ...sourceSettings,
+    env: {
+      ...sourceEnv,
+      ANTHROPIC_BASE_URL: gatewayUrl,
+      ANTHROPIC_API_URL: gatewayUrl,
+    },
+  };
 
-  await fs.writeFile(
-    settingsPath,
-    JSON.stringify({
-      env: {
-        ANTHROPIC_BASE_URL: gatewayUrl,
-        ANTHROPIC_API_URL: gatewayUrl,
-      },
-    }),
-    "utf8",
-  );
+  await fs.writeFile(settingsPath, `${JSON.stringify(gatewaySettings, null, 2)}\n`, "utf8");
 
   return {
     path: settingsPath,
@@ -385,8 +401,8 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
     );
   }
 
-  const claudeSettingsEnv = await readClaudeSettingsEnv(process.env);
-  const upstreamBaseUrl = getWrappedUpstreamBaseUrl(process.env, overrides, claudeSettingsEnv);
+  const claudeSettings = await readClaudeSettings(process.env);
+  const upstreamBaseUrl = getWrappedUpstreamBaseUrl(process.env, overrides, claudeSettings.env);
   const config = getConfig({
     ...overrides,
     upstreamBaseUrl,
@@ -434,7 +450,7 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
   try {
     const claudeCommand = getClaudeCommand(overrides);
     generatedSettings = shouldInjectClaudeSettings(claudeCommand)
-      ? await createGatewayClaudeSettings(address.url)
+      ? await createGatewayClaudeSettings(address.url, claudeSettings.settings)
       : undefined;
     const childArgs = getGatewayClaudeArgs(claudeCommand, claudeArgs, generatedSettings?.path);
     const child = spawn(claudeCommand, childArgs, {
