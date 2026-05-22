@@ -1,6 +1,6 @@
 {
   "name": "prompt-gateway",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Capture and inspect Claude Code /v1/messages payloads locally.",
   "repository": {
     "type": "git",

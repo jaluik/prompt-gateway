@@ -29,11 +29,6 @@ interface ClaudeSettingsSnapshot {
   settings: Record<string, unknown>;
 }
 
-interface GeneratedClaudeSettings {
-  path: string;
-  cleanup: () => Promise<void>;
-}
-
 const KNOWN_OPTIONS = new Set([
   "--help",
   "-h",
@@ -357,42 +352,27 @@ function shouldInjectClaudeSettings(claudeCommand: string): boolean {
   return path.basename(claudeCommand).toLowerCase().includes("claude");
 }
 
-async function createGatewayClaudeSettings(
-  gatewayUrl: string,
-  sourceSettings: Record<string, unknown>,
-): Promise<GeneratedClaudeSettings> {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "prompt-gateway-claude-settings-"));
-  const settingsPath = path.join(tempDir, "settings.json");
-  const sourceEnv = isRecord(sourceSettings.env) ? sourceSettings.env : {};
+function createGatewayClaudeSettingsJson(gatewayUrl: string): string {
   const gatewaySettings = {
-    ...sourceSettings,
     env: {
-      ...sourceEnv,
       ANTHROPIC_BASE_URL: gatewayUrl,
       ANTHROPIC_API_URL: gatewayUrl,
     },
   };
 
-  await fs.writeFile(settingsPath, `${JSON.stringify(gatewaySettings, null, 2)}\n`, "utf8");
-
-  return {
-    path: settingsPath,
-    cleanup: async () => {
-      await fs.rm(tempDir, { recursive: true, force: true });
-    },
-  };
+  return JSON.stringify(gatewaySettings);
 }
 
 function getGatewayClaudeArgs(
   claudeCommand: string,
   claudeArgs: string[],
-  settingsPath?: string,
+  settingsJson?: string,
 ): string[] {
-  if (!shouldInjectClaudeSettings(claudeCommand) || !settingsPath) {
+  if (!shouldInjectClaudeSettings(claudeCommand) || !settingsJson) {
     return claudeArgs;
   }
 
-  return ["--settings", settingsPath, ...claudeArgs];
+  return ["--settings", settingsJson, ...claudeArgs];
 }
 
 async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise<void> {
@@ -450,15 +430,14 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
     });
   };
 
-  let generatedSettings: GeneratedClaudeSettings | undefined;
   let signalForwarder: ((signal: NodeJS.Signals) => void) | undefined;
 
   try {
     const claudeCommand = getClaudeCommand(overrides);
-    generatedSettings = shouldInjectClaudeSettings(claudeCommand)
-      ? await createGatewayClaudeSettings(address.url, claudeSettings.settings)
+    const settingsJson = shouldInjectClaudeSettings(claudeCommand)
+      ? createGatewayClaudeSettingsJson(address.url)
       : undefined;
-    const childArgs = getGatewayClaudeArgs(claudeCommand, claudeArgs, generatedSettings?.path);
+    const childArgs = getGatewayClaudeArgs(claudeCommand, claudeArgs, settingsJson);
     const child = spawn(claudeCommand, childArgs, {
       stdio: "inherit",
       env: childEnv,
@@ -484,7 +463,6 @@ async function runClaude(overrides: CliOverrides, claudeArgs: string[]): Promise
       process.off("SIGTERM", signalForwarder);
     }
     await cleanup();
-    await generatedSettings?.cleanup();
   }
 }
 

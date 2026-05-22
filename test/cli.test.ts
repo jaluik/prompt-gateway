@@ -140,13 +140,13 @@ test("claude wrapper honors Claude settings upstream while overriding Claude bas
     `#!/usr/bin/env node
 const fs = require("node:fs");
 const settingsIndex = process.argv.indexOf("--settings");
-const settingsPath = settingsIndex === -1 ? null : process.argv[settingsIndex + 1];
-const settings = settingsPath ? JSON.parse(fs.readFileSync(settingsPath, "utf8")) : null;
+const settingsArg = settingsIndex === -1 ? null : process.argv[settingsIndex + 1];
+const settings = settingsArg ? JSON.parse(settingsArg.trim().startsWith("{") ? settingsArg : fs.readFileSync(settingsArg, "utf8")) : null;
 console.log(JSON.stringify({
   base: process.env.ANTHROPIC_BASE_URL,
   upstream: process.env.PROMPT_GATEWAY_UPSTREAM_URL,
   settings,
-  settingsPath,
+  settingsArg,
   args: process.argv.slice(2),
 }));
 `,
@@ -176,7 +176,7 @@ console.log(JSON.stringify({
     base?: string;
     upstream?: string;
     settings?: { env?: Record<string, string>; permissions?: unknown };
-    settingsPath?: string;
+    settingsArg?: string;
     args?: string[];
   };
 
@@ -184,15 +184,14 @@ console.log(JSON.stringify({
   assert.equal(payload.upstream, "https://api.kimi.com/coding/");
   assert.equal(payload.settings?.env?.ANTHROPIC_BASE_URL, payload.base);
   assert.equal(payload.settings?.env?.ANTHROPIC_API_URL, payload.base);
-  assert.equal(payload.settings?.env?.ANTHROPIC_API_KEY, "settings-api-key");
-  assert.equal(payload.settings?.env?.ANTHROPIC_VERSION, "2025-01-01");
-  assert.equal(payload.settings?.env?.ANTHROPIC_AUTH_TOKEN, "test-token");
-  assert.deepEqual(payload.settings?.permissions, {
-    allow: ["Bash(pnpm test)"],
-  });
+  assert.equal(payload.settings?.env?.ANTHROPIC_API_KEY, undefined);
+  assert.equal(payload.settings?.env?.ANTHROPIC_VERSION, undefined);
+  assert.equal(payload.settings?.env?.ANTHROPIC_AUTH_TOKEN, undefined);
+  assert.equal(payload.settings?.permissions, undefined);
   assert.equal(payload.args?.[0], "--settings");
-  assert.equal(payload.settingsPath, payload.args?.[1]);
-  assert.equal(path.basename(payload.settingsPath || ""), "settings.json");
+  assert.equal(payload.settingsArg, payload.args?.[1]);
+  assert.match(payload.settingsArg || "", /^\{/);
+  assert.doesNotMatch(payload.settingsArg || "", /settings-api-key|test-token/);
   assert.equal(payload.args?.[2], "--print");
 });
 
@@ -208,13 +207,13 @@ test("claude wrapper does not require an existing Claude settings file", async (
     `#!/usr/bin/env node
 const fs = require("node:fs");
 const settingsIndex = process.argv.indexOf("--settings");
-const settingsPath = settingsIndex === -1 ? null : process.argv[settingsIndex + 1];
-const settings = settingsPath ? JSON.parse(fs.readFileSync(settingsPath, "utf8")) : null;
+const settingsArg = settingsIndex === -1 ? null : process.argv[settingsIndex + 1];
+const settings = settingsArg ? JSON.parse(settingsArg.trim().startsWith("{") ? settingsArg : fs.readFileSync(settingsArg, "utf8")) : null;
 console.log(JSON.stringify({
   base: process.env.ANTHROPIC_BASE_URL,
   upstream: process.env.PROMPT_GATEWAY_UPSTREAM_URL,
   settings,
-  settingsPath,
+  settingsArg,
   args: process.argv.slice(2),
 }));
 `,
@@ -243,7 +242,7 @@ console.log(JSON.stringify({
     base?: string;
     upstream?: string;
     settings?: { env?: Record<string, string> };
-    settingsPath?: string;
+    settingsArg?: string;
     args?: string[];
   };
 
@@ -252,8 +251,8 @@ console.log(JSON.stringify({
   assert.equal(payload.settings?.env?.ANTHROPIC_BASE_URL, payload.base);
   assert.equal(payload.settings?.env?.ANTHROPIC_API_URL, payload.base);
   assert.equal(payload.args?.[0], "--settings");
-  assert.equal(payload.settingsPath, payload.args?.[1]);
-  assert.equal(path.basename(payload.settingsPath || ""), "settings.json");
+  assert.equal(payload.settingsArg, payload.args?.[1]);
+  assert.match(payload.settingsArg || "", /^\{/);
 });
 
 test("claude wrapper uses ANTHROPIC_API_URL when Claude settings file is absent", async () => {
@@ -272,13 +271,14 @@ test("claude wrapper uses ANTHROPIC_API_URL when Claude settings file is absent"
     `#!/usr/bin/env node
 const fs = require("node:fs");
 const settingsIndex = process.argv.indexOf("--settings");
-const settingsPath = settingsIndex === -1 ? null : process.argv[settingsIndex + 1];
-const settings = settingsPath ? JSON.parse(fs.readFileSync(settingsPath, "utf8")) : null;
+const settingsArg = settingsIndex === -1 ? null : process.argv[settingsIndex + 1];
+const settings = settingsArg ? JSON.parse(settingsArg.trim().startsWith("{") ? settingsArg : fs.readFileSync(settingsArg, "utf8")) : null;
 console.log(JSON.stringify({
   base: process.env.ANTHROPIC_BASE_URL,
   apiUrl: process.env.ANTHROPIC_API_URL,
   upstream: process.env.PROMPT_GATEWAY_UPSTREAM_URL,
   settings,
+  settingsArg,
   args: process.argv.slice(2),
 }));
 `,
@@ -309,6 +309,7 @@ console.log(JSON.stringify({
     apiUrl?: string;
     upstream?: string;
     settings?: { env?: Record<string, string> };
+    settingsArg?: string;
     args?: string[];
   };
 
@@ -318,6 +319,8 @@ console.log(JSON.stringify({
   assert.equal(payload.settings?.env?.ANTHROPIC_BASE_URL, payload.base);
   assert.equal(payload.settings?.env?.ANTHROPIC_API_URL, payload.base);
   assert.equal(payload.args?.[0], "--settings");
+  assert.equal(payload.settingsArg, payload.args?.[1]);
+  assert.match(payload.settingsArg || "", /^\{/);
 });
 
 test("claude wrapper falls back when the configured gateway port is already in use", async () => {
